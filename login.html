@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TAR Honeypot - Login</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="login-container">
+        <div class="left-panel">
+            <div class="brand-box">
+                <h1>TAR Honeypot</h1>
+                <p class="subtitle">
+                    Web-based monitoring interface for detecting, recording,
+                    and analyzing suspicious attacker activities.
+                </p>
+                <div class="feature-list">
+                    <div class="feature-card">
+                        <h3>System Access</h3>
+                        <p>Authorized administrators and analysts can log in to monitor captured attacker activities.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="right-panel">
+            <div class="login-box">
+                <h2 id="formTitle">System Login</h2>
+                <p class="login-text" id="formDesc">Please sign in to access the monitoring dashboard.</p>
+
+                <!-- Feedback banners. Both stay hidden until the script writes a
+                     message into one of them and switches its display on. -->
+                <div id="errorMsg" class="alert-box alert-error"></div>
+                <div id="successMsg" class="alert-box alert-success"></div>
+
+                <!-- Step 1: ordinary username / password sign-in -->
+                <div id="loginFormContainer">
+                    <form id="loginForm">
+                        <div class="input-group">
+                            <label for="username">Username or Email</label>
+                            <input type="text" id="username" placeholder="Enter your username or email" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="password">Password</label>
+                            <input type="password" id="password" placeholder="Enter your password" required>
+                        </div>
+                        <button type="submit" class="login-btn" id="loginBtn">Login</button>
+                    </form>
+                </div>
+
+                <!-- Step 2: forced password change. Revealed only when the backend
+                     reports the account is still using its default password. -->
+                <div id="changePwdContainer" style="display: none;">
+                    <form id="changePwdForm">
+                        <div class="input-group">
+                            <label for="newPassword">New Password</label>
+                            <!-- minlength="8" is deliberately omitted: the regex check in the
+                                 script below owns password validation instead. -->
+                            <input type="password" id="newPassword" placeholder="Enter a secure password" required>
+                            
+                            <div id="pwdInlineError" class="inline-error inline-error-multiline">
+                                Password must be at least 8 characters long, include an uppercase letter, a number, and a symbol.
+                            </div>
+                        </div>
+                        <div class="input-group">
+                            <label for="confirmPassword">Confirm New Password</label>
+                            <!-- minlength="8" deliberately omitted here as well -->
+                            <input type="password" id="confirmPassword" placeholder="Type your password again" required>
+                        </div>
+                        <button type="submit" class="login-btn" id="updateBtn">Update & Secure Login</button>
+                    </form>
+                </div>
+
+                <p class="warning-text">
+                    Authorized users only. Unauthorized access is strictly prohibited.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let pendingUser = null;
+        
+        // Landing on the login page always clears any previous session and stored token
+        localStorage.removeItem('tar_current_user');
+        localStorage.removeItem('tar_token');
+
+        const errorMsg = document.getElementById('errorMsg');
+        const successMsg = document.getElementById('successMsg');
+        const loginFormContainer = document.getElementById('loginFormContainer');
+        const changePwdContainer = document.getElementById('changePwdContainer');
+        const formTitle = document.getElementById('formTitle');
+        const formDesc = document.getElementById('formDesc');
+        const pwdInlineError = document.getElementById('pwdInlineError');
+        const newPasswordInput = document.getElementById('newPassword');
+
+        // Live validation: clear the red hint as soon as the typed password
+        // satisfies the strength rule (8+ chars, upper case, digit, symbol).
+        newPasswordInput.addEventListener('input', function() {
+            const strongPwdRegex = /^(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
+            if (strongPwdRegex.test(this.value)) {
+                pwdInlineError.style.display = 'none';
+            }
+        });
+
+        // Step 1 - sign in. On success the token is stored and the user is sent to
+        // the dashboard, unless the backend reports the account is still on its
+        // default password, in which case step 2 below is revealed instead.
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const btn = document.getElementById('loginBtn');
+            btn.textContent = "Authenticating...";
+            btn.disabled = true;
+            errorMsg.style.display = 'none';
+
+            const usernameInput = document.getElementById('username').value.trim();
+            const passwordInput = document.getElementById('password').value;
+
+            try {
+                const response = await fetch('http://127.0.0.1:5000/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: usernameInput, password: passwordInput })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    // Store the token as soon as the backend returns it
+                    // Note: the field is result.token, not data.token
+                    localStorage.setItem('tar_token', result.token); 
+
+                    if (result.requirePasswordChange) {
+                        pendingUser = result.user; 
+                        
+                        loginFormContainer.style.display = 'none';
+                        changePwdContainer.style.display = 'block';
+                        formTitle.textContent = "Action Required";
+                        formDesc.innerHTML = `<span style="color: #d97706; font-weight:bold;">Security Policy:</span> You are using a default password. Please set a new personal password to continue.`;
+                        
+                    } else {
+                        localStorage.setItem('tar_current_user', JSON.stringify(result.user));
+                        window.location.href = 'dashboard.html';
+                    }
+                } else {
+                    errorMsg.textContent = result.error || "Login failed.";
+                    errorMsg.style.display = 'block';
+                    btn.textContent = "Login";
+                    btn.disabled = false;
+                }
+            } catch (error) {
+                errorMsg.textContent = "Network error. Is the backend running?";
+                errorMsg.style.display = 'block';
+                btn.textContent = "Login";
+                btn.disabled = false;
+            }
+        });
+
+        // Step 2 - forced password change. Validates the new password against the
+        // strength rule and the confirmation field, then saves it and continues
+        // through to the dashboard.
+        document.getElementById('changePwdForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const newPwd = newPasswordInput.value;
+            const confirmPwd = document.getElementById('confirmPassword').value;
+            const btn = document.getElementById('updateBtn');
+            
+            errorMsg.style.display = 'none';
+            pwdInlineError.style.display = 'none';
+
+            const strongPwdRegex = /^(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
+            if (!strongPwdRegex.test(newPwd)) {
+                pwdInlineError.style.display = 'block';
+                return;
+            }
+
+            if (newPwd !== confirmPwd) {
+                errorMsg.textContent = "Passwords do not match. Please try again.";
+                errorMsg.style.display = 'block';
+                return;
+            }
+
+            btn.textContent = "Updating...";
+            btn.disabled = true;
+
+            try {
+                // The password change request must carry the token stored above
+                const token = localStorage.getItem('tar_token');
+                
+                const response = await fetch('http://127.0.0.1:5000/api/change-password', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}` 
+                    },
+                    body: JSON.stringify({ id: pendingUser.id, newPassword: newPwd })
+                });
+
+                if (response.ok) {
+                    successMsg.textContent = "Password updated! Redirecting to dashboard...";
+                    successMsg.style.display = 'block';
+                    errorMsg.style.display = 'none';
+                    pwdInlineError.style.display = 'none';
+                    
+                    localStorage.setItem('tar_current_user', JSON.stringify(pendingUser));
+                    // The token is already stored above; re-saving data.token here used to throw
+                    
+                    setTimeout(() => {
+                        window.location.href = 'dashboard.html';
+                    }, 1500);
+                } else {
+                    const result = await response.json();
+                    errorMsg.textContent = result.error || "Failed to update password.";
+                    errorMsg.style.display = 'block';
+                    btn.textContent = "Update & Secure Login";
+                    btn.disabled = false;
+                }
+            } catch (error) {
+                errorMsg.textContent = "Network error while updating password.";
+                errorMsg.style.display = 'block';
+                btn.textContent = "Update & Secure Login";
+                btn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

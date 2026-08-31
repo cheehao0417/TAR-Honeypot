@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TAR Honeypot - Attack Logs</title>
+    <!-- Shared site-wide styles first, then this page's own overrides -->
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="attack-logs.css">
+</head>
+<body class="dashboard-body">
+
+    <div class="dashboard-container">
+
+        <aside class="sidebar">
+            <div class="sidebar-logo">
+                <button id="sidebarToggle" class="sidebar-toggle-btn">☰</button>
+                <div class="sidebar-logo-text">
+                    <h2>TAR Honeypot</h2>
+                    <p>IoT Monitoring System</p>
+                </div>
+            </div>
+
+            <nav class="sidebar-menu">
+                <a href="dashboard.html">Dashboard</a>
+                <a href="attack-logs.html" class="active">Attack Logs</a>
+                <a href="alerts.html">Alerts</a>
+                <a href="attacker-details.html">Attacker Details</a>
+                <a href="analytics.html">Analytics</a>
+                <a href="manage-users.html">Manage Users</a>
+                <a href="setting.html">Settings</a>
+                <a href="login.html">Logout</a>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <header class="topbar">
+                <div>
+                    <h1>Parsed Attack Logs</h1>
+                    <p>View structured threat intelligence</p>
+                </div>
+            </header>
+
+            <section class="filter-bar">
+                <div class="filter-group">
+                    <label for="search">Search</label>
+                    <input type="text" id="search" placeholder="Search IP, Username or payload">
+                </div>
+
+                <div class="filter-group">
+                    <label for="device">Target Device/Protocol</label>
+                    <select id="device">
+                        <option value="All">All IoT Devices/Protocol</option>
+                        <option value="Smart Door Lock">Smart Door Lock (SSH)</option>
+                        <option value="Smart Plug">Smart Plug (Telnet)</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="riskLevel">Risk Level</label>
+                    <select id="riskLevel">
+                        <option value="All">All Risks</option>
+                        <option value="Critical">Critical Risk (Malicious Payload)</option>
+                        <option value="High">High Risk (Unauthorized Override)</option>
+                        <option value="Low">Low Risk (Credential Stuffing)</option>
+                        <option value="No">No Risk (Automated Probing)</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="date">Date</label>
+                    <input type="date" id="date">
+                </div>
+            </section>
+
+            <section class="logs-panel">
+                <div class="logs-header">
+                    <div>
+                        <h2>IoT Threat Records</h2>
+                        <p id="resultCountText" class="result-count">Loading logs...</p>
+                    </div>
+                    <button id="exportBtn" class="export-btn">Export Structured Logs</button>
+                </div>
+                
+                <!-- Parsed Cowrie events, one row per captured attack. The header row
+                     stays pinned while the body scrolls; column widths are fixed in
+                     attack-logs.css so the payload column cannot push the table around. -->
+                <div class="table-wrapper is-scrollable logs-scroll">
+                    <table class="logs-table attack-logs-table">
+                        <thead class="sticky-thead sticky-thead-shadow">
+                            <tr>
+                                <th class="col-timestamp">Timestamp</th>
+                                <th class="col-source-ip">Source IP</th>
+                                <th class="col-device">Target Device</th>
+                                <th class="col-protocol">Protocol</th>
+                                <th class="col-username">Username</th>
+                                <th class="col-risk">Status/Risk</th>
+                                <th class="col-payload">Parsed Payload / Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logsTableBody">
+                            <tr>
+                                <td colspan="7" class="table-msg-cell is-muted">Fetching threat intelligence data...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Aggregates recomputed from whatever rows currently pass the filters -->
+            <section class="log-summary-grid">
+                <div class="dashboard-panel">
+                    <h2>Most Targeted Default Credentials</h2>
+                    <div class="protocol-box" id="topCredentialsBox">
+                        <div class="protocol-item"><span class="text-muted">Analyzing data...</span></div>
+                    </div>
+                </div>
+
+                <div class="dashboard-panel">
+                    <h2>Top Extracted Payloads</h2>
+                    <div class="protocol-box" id="topPayloadsBox">
+                        <div class="protocol-item"><span class="text-muted">Analyzing data...</span></div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+    <script>
+        // Global API guard: attaches the auth token to every request and forces a re-login when the session is no longer valid
+        const originalFetch = window.fetch;
+        window.fetch = async function() {
+            let [resource, config] = arguments;
+            
+            // Attach the Bearer token to every API call except the login request itself
+            if (typeof resource === 'string' && resource.includes('/api/') && !resource.includes('/api/login')) {
+                config = config || {};
+                config.headers = config.headers || {};
+                const token = localStorage.getItem('tar_token');
+                if (token) {
+                    config.headers['Authorization'] = `Bearer ${token}`;
+                }
+            }
+            
+            const response = await originalFetch(resource, config);
+            
+            // Token rejected (forged, or invalidated by a server restart) - send the user back to the login page
+            if (response.status === 401) {
+                alert("Session Expired or Unauthorized! Returning to login.");
+                localStorage.removeItem('tar_current_user');
+                localStorage.removeItem('tar_token');
+                window.location.href = 'login.html';
+            }
+            return response;
+        };
+
+        const currentUser = JSON.parse(localStorage.getItem('tar_current_user'));
+        
+        if (!currentUser) {
+            window.location.href = 'login.html';
+        } else {
+            // Shared page logic: hide the admin-only sidebar links. No URL checks needed here
+            if (currentUser.role !== 'Administrator' && currentUser.role !== 'IT Manager') {
+                const manageUsersLink = document.querySelector('a[href="manage-users.html"]');
+                if (manageUsersLink) {
+                    manageUsersLink.style.display = 'none';
+                }
+            }
+        }
+
+        const sidebarToggle = document.getElementById('sidebarToggle');
+        const dashboardContainer = document.querySelector('.dashboard-container');
+        if(sidebarToggle) {
+            sidebarToggle.addEventListener('click', function() {
+                dashboardContainer.classList.toggle('sidebar-hidden');
+            });
+        }
+
+        let allLogsData = [];
+        let currentFilteredLogs = []; 
+
+        // Load the full event list once and keep it in memory, so the filters
+        // below can work client-side without hitting the backend again.
+        async function fetchAttackLogs() {
+            try {
+                const response = await fetch('http://127.0.0.1:5000/api/logs'); 
+                allLogsData = await response.json();
+                
+                if (allLogsData.length > 0) {
+                    const dateInput = document.getElementById('date');
+                    const latestDateObj = new Date(allLogsData[0].timestamp);
+                    
+                    const formatDate = (date) => {
+                        const y = date.getFullYear();
+                        const m = String(date.getMonth() + 1).padStart(2, '0');
+                        const d = String(date.getDate()).padStart(2, '0');
+                        return `${y}-${m}-${d}`;
+                    };
+                    
+                    const maxDateStr = formatDate(latestDateObj);
+                    const minDateObj = new Date(latestDateObj);
+                    minDateObj.setDate(latestDateObj.getDate() - 6);
+                    const minDateStr = formatDate(minDateObj);
+                    
+                    dateInput.max = maxDateStr;
+                    dateInput.min = minDateStr;
+                }
+                
+                applyFilters();
+            } catch (error) {
+                console.error("Error connecting to honeypot database pipeline:", error);
+            }
+        }
+
+        // Narrow the cached logs by device, protocol, risk level and date,
+        // then re-render the table and the summary panels.
+        function applyFilters() {
+            const searchTerm = document.getElementById('search').value.toLowerCase();
+            const deviceFilter = document.getElementById('device').value;
+            const riskFilter = document.getElementById('riskLevel').value; 
+            const dateFilter = document.getElementById('date').value; 
+
+            currentFilteredLogs = allLogsData.filter(log => {
+                const safePort = log.dst_port && log.dst_port !== 'N/A' ? parseInt(log.dst_port) : 23;
+                const deviceAsset = [22, 2222].includes(safePort) ? 'Smart Door Lock' : 'Smart Plug';
+                
+                const payloadStr = (log.input && log.input !== 'N/A') ? log.input.toLowerCase() : log.eventid.toLowerCase();
+                const ipStr = log.src_ip.toLowerCase();
+                const userStr = (log.username && log.username !== 'N/A') ? log.username.toLowerCase() : ''; 
+                const matchesSearch = ipStr.includes(searchTerm) || payloadStr.includes(searchTerm) || userStr.includes(searchTerm);
+
+                const matchesDevice = deviceFilter === 'All' || deviceAsset === deviceFilter;
+
+                const hasPayload = log.input && log.input !== 'N/A' && log.input.trim() !== '';
+                const isCommandEvent = log.eventid.startsWith('cowrie.command.');
+                
+                let currentRisk = 'No'; 
+                if (hasPayload || isCommandEvent) {
+                    currentRisk = 'Critical';
+                } else if (log.eventid === 'cowrie.login.success') {
+                    currentRisk = 'High';
+                } else if (log.eventid === 'cowrie.login.failed') {
+                    currentRisk = 'Low';
+                }
+                const matchesRisk = riskFilter === 'All' || currentRisk === riskFilter;
+
+                let matchesDate = true;
+                if (dateFilter) {
+                    const logDateObj = new Date(log.timestamp);
+                    const y = logDateObj.getFullYear();
+                    const m = String(logDateObj.getMonth() + 1).padStart(2, '0');
+                    const d = String(logDateObj.getDate()).padStart(2, '0');
+                    const localLogDateStr = `${y}-${m}-${d}`;
+                    matchesDate = localLogDateStr === dateFilter;
+                }
+
+                return matchesSearch && matchesDevice && matchesRisk && matchesDate;
+            });
+
+            renderTable(currentFilteredLogs);
+            updateSummaryCards(currentFilteredLogs);
+        }
+
+        // Draw the table rows, including the risk badge and the decoded second
+        // line shown under a hex-encoded payload.
+        function renderTable(logsToRender) {
+            const tableBody = document.getElementById('logsTableBody');
+            const countText = document.getElementById('resultCountText');
+            
+            if (!tableBody) return; 
+
+            tableBody.innerHTML = ''; 
+
+            const totalMatching = logsToRender.length;
+            const displayLimit = 100; 
+
+            if (totalMatching === 0) {
+                if (countText) countText.innerHTML = `Found <strong>0</strong> matching threats.`;
+                tableBody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 20px; color: #666;">No matching logs found. Try adjusting your filters.</td></tr>`;
+                return;
+            }
+
+            if (countText) {
+                if (totalMatching > displayLimit) {
+                    countText.innerHTML = `Found <strong>${totalMatching.toLocaleString()}</strong> matching threats. Click Export to view all.`;
+                } else {
+                    countText.innerHTML = `Found <strong>${totalMatching.toLocaleString()}</strong> matching threats.`;
+                }
+            }
+
+            const displayLogs = logsToRender.slice(0, displayLimit);
+
+            displayLogs.forEach(log => {
+                const tr = document.createElement('tr');
+                
+                const safePort = log.dst_port && log.dst_port !== 'N/A' ? parseInt(log.dst_port) : 23;
+                const deviceAsset = [22, 2222].includes(safePort) ? 'Smart Door Lock' : 'Smart Plug';
+                const protocol = [22, 2222].includes(safePort) ? 'SSH' : 'Telnet';
+                
+                const username = (log.username && log.username !== 'N/A') ? log.username : '<span style="color:#aaa;">-</span>';
+                
+                const hasPayload = log.input && log.input !== 'N/A' && log.input.trim() !== '';
+                const isCommandEvent = log.eventid.startsWith('cowrie.command.');
+                const rawPayload = hasPayload ? log.input : log.eventid;
+                const decodedPayload = log.decoded_input || '';
+                
+                let payloadLine1 = '';
+                let payloadLine2 = '';
+                if (hasPayload) {
+                    payloadLine1 = `<code style="color: #ff4d4d; font-weight: bold;">${log.input}</code>`;
+                    if (decodedPayload) {
+                        payloadLine2 = `<code style="color: #94a3b8; font-size: 0.85em; font-weight: normal;">Decoded: ${decodedPayload}</code>`;
+                    }
+                } else {
+                    payloadLine1 = `<code style="color: #666; background: none; padding: 0;">${log.eventid}</code>`;
+                }
+
+                let riskBadge = `<span class="badge no" style="background: #f8f9fa; color: #475569; border: 1px solid #e2e8f0; padding: 4px 8px; border-radius: 4px; font-size: 0.85em; white-space: nowrap;">No Risk</span>`;
+                
+                if (hasPayload || isCommandEvent) {
+                    riskBadge = `<span class="badge high" style="background: #fee2e2; color: #b91c1c; padding: 4px 8px; border-radius: 4px; font-size: 0.85em; white-space: nowrap;">Critical Risk</span>`;
+                } else if (log.eventid === 'cowrie.login.success') {
+                    riskBadge = `<span class="badge medium" style="background: #fff8e6; color: #d97706; border: 1px solid #ffe5b4; padding: 4px 8px; border-radius: 4px; font-size: 0.85em; white-space: nowrap;">High Risk</span>`;
+                } else if (log.eventid === 'cowrie.login.failed') {
+                    riskBadge = `<span class="badge low" style="background: #e0f2fe; color: #0369a1; padding: 4px 8px; border-radius: 4px; font-size: 0.85em; white-space: nowrap;">Low Risk</span>`;
+                }
+
+                tr.innerHTML = `
+                    <td style="padding: 12px 15px; border-bottom: 1px solid #f1f5f9; white-space: nowrap;">${new Date(log.timestamp).toLocaleString(undefined, {year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true})}</td>
+                    <td style="padding: 12px 15px; border-bottom: 1px solid #f1f5f9; white-space: nowrap;"><strong>${log.src_ip}</strong></td>
+                    <td style="padding: 12px 15px; border-bottom: 1px solid #f1f5f9; white-space: nowrap;">${deviceAsset}</td>
+                    <td style="padding: 12px 15px; border-bottom: 1px solid #f1f5f9; white-space: nowrap;">${protocol}</td>
+                    <td style="padding: 12px 15px; border-bottom: 1px solid #f1f5f9; white-space: nowrap;">${username}</td>
+                    <td style="padding: 12px 15px; border-bottom: 1px solid #f1f5f9; white-space: nowrap;">${riskBadge}</td>
+                    <td style="padding: 12px 15px; border-bottom: 1px solid #f1f5f9; max-width: 0;">
+                        <div style="width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: default;" title="${rawPayload.replace(/"/g, '&quot;')}">
+                            ${payloadLine1}
+                        </div>
+                        ${payloadLine2 ? `<div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 3px;">${payloadLine2}</div>` : ''}
+                    </td>
+                `;
+                tableBody.appendChild(tr);
+            });
+        }
+
+        // Recompute the top-credentials and top-payloads panels from whatever
+        // rows are currently visible.
+        function updateSummaryCards(logs) {
+            const credCounts = {};
+            const payloadCounts = {};
+
+            logs.forEach(log => {
+                if (log.eventid === 'cowrie.login.failed' || log.eventid === 'cowrie.login.success') {
+                    // The backend already normalises this field, so the redundant front-end trim() was removed
+                    const u = (log.username && log.username !== 'N/A') ? log.username : '<empty>';
+                    const p = (log.password && log.password !== 'N/A') ? log.password : '<empty>';
+                    const cred = `${u} / ${p}`;
+                    credCounts[cred] = (credCounts[cred] || 0) + 1;
+                }
+
+                const hasPayload = log.input && log.input !== 'N/A' && log.input.trim() !== '';
+                if (hasPayload) {
+                    // No .trim() needed - Python has already cleaned this value
+                    const cmd = log.input;
+                    payloadCounts[cmd] = (payloadCounts[cmd] || 0) + 1;
+                }
+            });
+
+            const topCreds = Object.entries(credCounts).sort((a, b) => b[1] - a[1]).slice(0, 2);
+            const topPayloads = Object.entries(payloadCounts).sort((a, b) => b[1] - a[1]).slice(0, 2);
+
+            const credBox = document.getElementById('topCredentialsBox');
+            credBox.innerHTML = '';
+            if (topCreds.length === 0) {
+                credBox.innerHTML = '<div class="protocol-item"><span style="color:#888;">No credentials captured</span></div>';
+            } else {
+                topCreds.forEach(([cred, count]) => {
+                    credBox.innerHTML += `
+                        <div class="protocol-item">
+                            <span>${cred}</span>
+                            <strong>${count} attempts</strong>
+                        </div>
+                    `;
+                });
+            }
+
+            const payloadBox = document.getElementById('topPayloadsBox');
+            payloadBox.innerHTML = '';
+            if (topPayloads.length === 0) {
+                payloadBox.innerHTML = '<div class="protocol-item"><span style="color:#888;">No payloads captured</span></div>';
+            } else {
+                topPayloads.forEach(([cmd, count]) => {
+                    payloadBox.innerHTML += `
+                        <div class="protocol-item">
+                            <span style="font-family: monospace; color: #ff4d4d; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70%;" title="${cmd.replace(/"/g, '&quot;')}">${cmd}</span>
+                            <strong>${count} times</strong>
+                        </div>
+                    `;
+                });
+            }
+        }
+
+        const exportBtn = document.getElementById('exportBtn');
+        if (exportBtn) {
+            exportBtn.addEventListener('click', () => {
+                const search = document.getElementById('search').value.trim();
+                const device = document.getElementById('device').value;
+                const risk = document.getElementById('riskLevel').value;
+                const date = document.getElementById('date').value;
+                
+                let queryStr = `type=logs&search=${encodeURIComponent(search)}&device=${encodeURIComponent(device)}&risk=${encodeURIComponent(risk)}&date=${encodeURIComponent(date)}&token=${localStorage.getItem('tar_token')}`;
+                window.location.href = `http://127.0.0.1:5000/api/export-logs?${queryStr}`;
+            });
+        }
+
+        document.getElementById('search').addEventListener('input', applyFilters); 
+        document.getElementById('device').addEventListener('change', applyFilters); 
+        document.getElementById('riskLevel').addEventListener('change', applyFilters); 
+        document.getElementById('date').addEventListener('change', applyFilters);
+
+        // Page start-up: wire the filter controls and load the logs.
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchAttackLogs();
+            
+            setInterval(() => {
+                if (!document.hidden) fetchAttackLogs();
+            }, 15000);
+
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) fetchAttackLogs();
+            });
+        });
+    </script>
+</body>
+</html>

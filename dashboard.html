@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TAR Honeypot - Dashboard</title>
+    <!-- Shared site-wide styles first, then this page's own overrides -->
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="dashboard.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="dashboard-body">
+
+    <div class="dashboard-container">
+        
+        <aside class="sidebar">
+            <div class="sidebar-logo">
+                <button id="sidebarToggle" class="sidebar-toggle-btn">☰</button>
+                <div class="sidebar-logo-text">
+                    <h2>TAR Honeypot</h2>
+                    <p>IoT Monitoring System</p>
+                </div>
+            </div>
+
+            <nav class="sidebar-menu">
+                <a href="dashboard.html" class="active">Dashboard</a>
+                <a href="attack-logs.html">Attack Logs</a>
+                <a href="alerts.html">Alerts</a>
+                <a href="attacker-details.html">Attacker Details</a>
+                <a href="analytics.html">Analytics</a>
+                <a href="manage-users.html">Manage Users</a>
+                <a href="setting.html">Settings</a>
+                <a href="login.html">Logout</a>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <header class="topbar">
+                <div>
+                    <h1>Dashboard Overview</h1>
+                    <p>IoT Physical Threat Intelligence</p>
+                </div>
+            </header>
+
+            <section class="summary-cards">
+                <div class="summary-card">
+                    <h3>Total IoT Attack Events</h3>
+                    <p id="totalThreats">Loading...</p>
+                    <span>All captured activity</span>
+                </div>
+
+                <div class="summary-card">
+                    <h3>Active IoT Sessions</h3>
+                    <p id="activeSessions">Loading...</p>
+                    <span>Total recorded sessions</span>
+                </div>
+
+                <div class="summary-card">
+                    <h3>Unique Attacker IPs</h3>
+                    <p id="uniqueIps">Loading...</p>
+                    <span>Observed source</span>
+                </div>
+
+                <div class="summary-card card-critical is-clickable is-anchored"
+                     onclick="window.location.href='alerts.html'"
+                     onmouseover="this.style.transform='translateY(-5px)'; this.style.boxShadow='0 8px 16px rgba(255, 77, 77, 0.15)'" 
+                     onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'">
+                    
+                    <h3 class="card-heading-row">
+                        Alert Notifications 
+                    </h3>
+                    <p id="criticalAlerts">0</p>
+                    <span class="text-critical">Total physical threats</span>
+                </div>
+            </section>
+
+            <section class="dashboard-grid">
+                
+                <div class="dashboard-panel large-panel">
+                    <!-- Panel header: title on the left, live search box and CSV export
+                         on the right. Both act on the table below. -->
+                    <div class="panel-header-row">
+                        <h2 class="heading-inline">Recent Attack Activity</h2>
+                        
+                        <div class="panel-header-actions">
+                            <input type="text" id="recentSearchInput" placeholder="Search IP, Device, Protocol, Risk" class="recent-search-input">
+                            <button id="exportRecentBtn" class="export-btn export-btn-compact" onmouseover="this.style.background='#1d4ed8'" onmouseout="this.style.background='#2563eb'">Export Result</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Newest events first. This table never scrolls sideways: it shares
+                         a grid row with the panels beside it, so long values wrap. -->
+                    <div class="table-wrapper is-scrollable recent-activity-scroll">
+                        <table class="logs-table recent-activity-table">
+                            <thead class="sticky-thead sticky-thead-shadow">
+                                <tr>
+                                    <th class="col-time">Time (Local)</th>
+                                    <th class="col-ip">Source IP</th>
+                                    <th class="col-device">Target Device</th>
+                                    <th class="col-protocol">Protocol</th>
+                                    <th class="col-risk">Status / Risk</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recentActivityTable">
+                                <tr><td colspan="5" class="table-msg-cell">Loading data...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="dashboard-panel">
+                    <h2>Physical Alert Category</h2>
+                    <div class="protocol-box">
+                        <!-- Ordered by severity. Clicking a row opens Attack Logs already
+                             filtered to that risk level. Critical (red) comes first. -->
+                        <div class="protocol-item quick-filter level-critical" onclick="applyQuickFilter('critical_risk')" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+                            <span class="quick-filter-label">Malicious Payload</span>
+                            <strong id="dashCriticalCount" class="quick-filter-count">0</strong>
+                        </div>
+                        <!-- High Risk: Unauthorized Override (amber) -->
+                        <div class="protocol-item quick-filter level-high" onclick="applyQuickFilter('high_risk')" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+                            <span class="quick-filter-label">Unauthorized Override</span>
+                            <strong id="dashHighCount" class="quick-filter-count">0</strong>
+                        </div>
+                        <!-- Low Risk: Credential Stuffing -->
+                        <div class="protocol-item quick-filter level-low" onclick="applyQuickFilter('low_risk')" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+                            <span class="quick-filter-label">Credential Stuffing</span>
+                            <strong id="dashLowCount" class="quick-filter-count">0</strong>
+                        </div>
+                        <!-- No Risk: Automated Probing -->
+                        <div class="protocol-item quick-filter level-none is-last" onclick="applyQuickFilter('no_risk')" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+                            <span class="quick-filter-label">Automated Scanning & Probing</span>
+                            <strong id="dashNoRiskCount" class="quick-filter-count">0</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dashboard-panel">
+                    <h2>Top Targeted IoT Devices</h2>
+                    
+                    <!-- Chart.js needs a parent with an explicit height to size against -->
+                    <div class="doughnut-box">
+                        <canvas id="deviceDoughnutChart"></canvas>
+                    </div>
+                    
+                    <div class="device-stats">
+                        <!-- Hand-built legend, so the colours stay readable under the chart -->
+                        <div class="device-legend">
+                            <div class="device-legend-item">
+                                <span class="device-legend-swatch is-lock"></span>
+                                <span class="device-legend-label">Smart Door Lock</span>
+                            </div>
+                            <div class="device-legend-item">
+                                <span class="device-legend-swatch is-plug"></span>
+                                <span class="device-legend-label">Smart Plug</span>
+                            </div>
+                        </div>
+
+                        <div class="protocol-box">
+                            <!-- Per-device counts. Clicking one filters Attack Logs to it. -->
+                            <div class="protocol-item device-filter" onclick="applyQuickFilter('device_lock')" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+                                <span class="device-filter-label">Smart Door Lock</span>
+                                <strong id="lockCountText" class="device-filter-count">0</strong>
+                            </div>
+                            <div class="protocol-item device-filter is-last" onclick="applyQuickFilter('device_plug')" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+                                <span class="device-filter-label">Smart Plug</span>
+                                <strong id="plugCountText" class="device-filter-count">0</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dashboard-panel">
+                    <h2>System Summary</h2>
+                    <div class="system-summary">
+                        <p><strong>Honeypot Status:</strong> <span id="sysHoneypotStatus">Loading...</span></p>
+                        <p><strong>Parsing Engine:</strong> <span id="sysParsingEngine">Loading...</span></p>
+                        <p><strong>AJAX Polling:</strong> <span id="ajaxPollingStatus">Loading...</span></p>
+                        <p><strong>Last Log Update:</strong> <span id="lastUpdateTime">Loading...</span></p>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        const currentUser = JSON.parse(localStorage.getItem('tar_current_user'));
+        
+        if (!currentUser) {
+            window.location.href = 'login.html';
+        } else {
+            // Shared page logic: hide the admin-only sidebar links. No URL checks needed here
+            if (currentUser.role !== 'Administrator' && currentUser.role !== 'IT Manager') {
+                const manageUsersLink = document.querySelector('a[href="manage-users.html"]');
+                if (manageUsersLink) {
+                    manageUsersLink.style.display = 'none';
+                }
+            }
+        }
+
+        const sidebarToggle = document.getElementById('sidebarToggle');
+        const dashboardContainer = document.querySelector('.dashboard-container');
+        if(sidebarToggle) {
+            sidebarToggle.addEventListener('click', function() {
+                dashboardContainer.classList.toggle('sidebar-hidden');
+            });
+        }
+
+        const API_BASE = 'http://127.0.0.1:5000/api';
+
+        // Global API guard: attaches the auth token to every request and forces a re-login when the session is no longer valid
+        const originalFetch = window.fetch;
+        window.fetch = async function() {
+            let [resource, config] = arguments;
+            
+            if (typeof resource === 'string' && resource.includes('/api/') && !resource.includes('/api/login')) {
+                config = config || {};
+                config.headers = config.headers || {};
+                const token = localStorage.getItem('tar_token');
+                if (token) {
+                    config.headers['Authorization'] = `Bearer ${token}`;
+                }
+            }
+            
+            const response = await originalFetch(resource, config);
+            
+            if (response.status === 401) {
+                alert("Session Expired or Unauthorized! Returning to login.");
+                localStorage.removeItem('tar_current_user');
+                localStorage.removeItem('tar_token');
+                window.location.href = 'login.html';
+            }
+            return response;
+        };
+        // End of the API guard
+        
+        let deviceChart = null; 
+
+        // Create the empty device doughnut chart; the counts arrive later from
+        // fetchDashboardSummary().
+        function initChart() {
+            const ctx = document.getElementById('deviceDoughnutChart').getContext('2d');
+            deviceChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Smart Door Lock', 'Smart Plug'],
+                    datasets: [{
+                        data: [50, 50],
+                        backgroundColor: ['#ff4d4d', '#ffaa00'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { 
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    let total = context.chart._metasets[context.datasetIndex].total;
+                                    let value = context.raw;
+                                    let percentage = total > 0 ? Math.round((value / total) * 100) + '%' : '0%';
+                                    return label + percentage;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Refresh the KPI cards, the risk breakdown, the device chart and the
+        // system status panel.
+        async function fetchDashboardSummary() {
+            try {
+                const response = await fetch(`${API_BASE}/dashboard-summary`);
+                const data = await response.json();
+
+                if (document.getElementById('totalThreats')) document.getElementById('totalThreats').textContent = data.total_threats.toLocaleString();
+                if (document.getElementById('activeSessions')) document.getElementById('activeSessions').textContent = data.active_sessions.toLocaleString();
+                if (document.getElementById('uniqueIps')) document.getElementById('uniqueIps').textContent = data.unique_ips.toLocaleString();
+                if (document.getElementById('criticalAlerts')) document.getElementById('criticalAlerts').textContent = data.critical_alerts.toLocaleString();
+
+                // Map each risk level onto its display category
+                if (document.getElementById('dashCriticalCount')) document.getElementById('dashCriticalCount').textContent = data.total_critical.toLocaleString();
+                if (document.getElementById('dashHighCount')) document.getElementById('dashHighCount').textContent = data.total_high.toLocaleString();
+                if (document.getElementById('dashLowCount')) document.getElementById('dashLowCount').textContent = data.total_low.toLocaleString();
+                if (document.getElementById('dashNoRiskCount')) document.getElementById('dashNoRiskCount').textContent = data.total_no_risk.toLocaleString();
+
+                if (document.getElementById('lockCountText')) document.getElementById('lockCountText').textContent = data.lock_count.toLocaleString();
+                if (document.getElementById('plugCountText')) document.getElementById('plugCountText').textContent = data.plug_count.toLocaleString();
+                
+                if (deviceChart) {
+                    deviceChart.data.datasets[0].data = [data.lock_count, data.plug_count];
+                    deviceChart.update();
+                }
+
+                if (document.getElementById('lastUpdateTime')) {
+                    document.getElementById('lastUpdateTime').textContent = new Date().toLocaleString(undefined, {
+                        year: 'numeric', month: '2-digit', day: '2-digit',
+                        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
+                    });
+                }
+                // Request succeeded - report the AJAX polling status as Connected
+                const pollingStatus = document.getElementById('ajaxPollingStatus');
+                if (pollingStatus) { pollingStatus.textContent = 'Active'; pollingStatus.style.color = '#16a34a'; }
+
+                // Fetch live system status
+                try {
+                    const statusRes = await fetch(`${API_BASE}/system-status`);
+                    const statusData = await statusRes.json();
+                    const honeypotEl = document.getElementById('sysHoneypotStatus');
+                    const parsingEl = document.getElementById('sysParsingEngine');
+                    if (honeypotEl) {
+                        honeypotEl.textContent = statusData.honeypot_status;
+                        honeypotEl.style.color = statusData.honeypot_status.includes('Running') ? '#16a34a' : '#dc2626';
+                    }
+                    if (parsingEl) {
+                        parsingEl.textContent = statusData.parsing_engine;
+                        parsingEl.style.color = statusData.parsing_engine === 'Active' ? '#16a34a' : '#dc2626';
+                    }
+                } catch(e) {
+                    const honeypotEl = document.getElementById('sysHoneypotStatus');
+                    const parsingEl = document.getElementById('sysParsingEngine');
+                    if (honeypotEl) { honeypotEl.textContent = 'Error'; honeypotEl.style.color = '#dc2626'; }
+                    if (parsingEl) { parsingEl.textContent = 'Error'; parsingEl.style.color = '#dc2626'; }
+                }
+            } catch (error) {
+                console.error("Failed to fetch dashboard summary:", error);
+                // Request failed - report the polling status as Disconnected
+                const pollingStatus = document.getElementById('ajaxPollingStatus');
+                if (pollingStatus) { pollingStatus.textContent = 'Disconnected'; pollingStatus.style.color = '#dc2626'; }
+                const honeypotEl = document.getElementById('sysHoneypotStatus');
+                const parsingEl = document.getElementById('sysParsingEngine');
+                const lastUpdateEl = document.getElementById('lastUpdateTime');
+                if (honeypotEl) { honeypotEl.textContent = 'Disconnected'; honeypotEl.style.color = '#dc2626'; }
+                if (parsingEl) { parsingEl.textContent = 'Offline'; parsingEl.style.color = '#dc2626'; }
+                if (lastUpdateEl) { lastUpdateEl.textContent = 'Disconnected'; lastUpdateEl.style.color = '#dc2626'; }
+            }
+        }
+
+        let allFetchedLogs = []; 
+
+        // Filter the Recent Attack Activity table by risk level or device.
+        // Called by the clickable rows in the two panels on the right.
+        function applyQuickFilter(filterType, isRefresh = false) {
+            const searchInput = document.getElementById('recentSearchInput');
+            if (!searchInput) return;
+
+            let keyword = "";
+            if (filterType === 'critical_risk') keyword = "critical risk";
+            else if (filterType === 'high_risk') keyword = "high risk";
+            else if (filterType === 'low_risk') keyword = "low risk";
+            else if (filterType === 'no_risk') keyword = "no risk"; 
+            else if (filterType === 'device_lock') keyword = "smart door lock";
+            else if (filterType === 'device_plug') keyword = "smart plug";
+
+            if (searchInput.value.toLowerCase() === keyword) {
+                searchInput.value = "";
+            } else {
+                searchInput.value = keyword;
+            }
+
+            searchInput.dispatchEvent(new Event('input'));
+        }
+
+        // Load the newest events for the Recent Attack Activity table.
+        async function fetchRecentActivity() {
+            try {
+                const response = await fetch(`${API_BASE}/logs`);
+                const logs = await response.json();
+                
+                allFetchedLogs = logs; 
+                
+                const searchInput = document.getElementById('recentSearchInput');
+                if (searchInput && searchInput.value.trim() !== '') {
+                    searchInput.dispatchEvent(new Event('input'));
+                } else {
+                    renderRecentTable(allFetchedLogs.slice(0, 100));
+                }
+            } catch (error) {
+                console.error("Failed to load pipeline alerts:", error);
+                // ❌ Flask offline — set all status fields to disconnected
+                const parsingEl = document.getElementById('alertParsingEngine');
+                const cowrieEl = document.getElementById('alertCowrieStream');
+                const lastUpdateEl = document.getElementById('lastUpdateTime');
+                if (parsingEl) { parsingEl.textContent = 'Offline'; parsingEl.style.color = '#dc2626'; }
+                if (cowrieEl) { cowrieEl.textContent = 'Disconnected'; cowrieEl.style.color = '#dc2626'; }
+                if (lastUpdateEl) { lastUpdateEl.textContent = 'Disconnected'; lastUpdateEl.style.color = '#dc2626'; }
+            }
+        }
+
+        // Draw the recent-activity rows together with their risk badges.
+        function renderRecentTable(logsToRender) {
+            const tableBody = document.getElementById('recentActivityTable');
+            if(!tableBody) return;
+            tableBody.innerHTML = '';
+            
+            if (logsToRender.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px; color: #64748b;">No matching records found.</td></tr>';
+                return;
+            }
+
+            logsToRender.forEach(log => {
+                const time = new Date(log.timestamp).toLocaleString(undefined, {
+                    year: 'numeric', month: '2-digit', day: '2-digit',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
+                });
+                
+                const isLock = log.dst_port === 2222;
+                const device = isLock ? "Smart Door Lock" : "Smart Plug";
+                const protocol = isLock ? `SSH (Port 2222)` : `Telnet (Port ${log.dst_port || 23})`;
+                
+                let riskBadge = `<span class="badge no" style="background: #f8f9fa; color: #475569; border: 1px solid #e2e8f0; padding: 4px 8px; border-radius: 4px; font-size: 0.85em;">No Risk</span>`;
+                
+                // Badge rendering, following the same risk mapping as above
+                if (log.eventid === 'cowrie.command.input' || (log.input && log.input !== 'N/A' && log.input.trim() !== '')) {
+                    riskBadge = `<span class="badge high" style="background: #fee2e2; color: #b91c1c; padding: 4px 8px; border-radius: 4px; font-size: 0.85em;">Critical Risk</span>`;
+                } else if (log.eventid === 'cowrie.login.success') {
+                    riskBadge = `<span class="badge medium" style="background: #fff8e6; color: #d97706; border: 1px solid #ffe5b4; padding: 4px 8px; border-radius: 4px; font-size: 0.85em;">High Risk</span>`;
+                } else if (log.eventid === 'cowrie.login.failed') {
+                    riskBadge = `<span class="badge low" style="background: #e0f2fe; color: #0369a1; padding: 4px 8px; border-radius: 4px; font-size: 0.85em;">Low Risk</span>`;
+                }
+
+                tableBody.innerHTML += `
+                    <tr style="border-bottom: 1px solid #f1f5f9;">
+                        <td style="padding: 10px;">${time}</td>
+                        <td style="padding: 10px; font-weight: 500;">${log.src_ip}</td>
+                        <td style="padding: 10px; color: #475569;">${device}</td>
+                        <td style="padding: 10px; color: #475569;">${protocol}</td>
+                        <td style="padding: 10px;">${riskBadge}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        const searchInput = document.getElementById('recentSearchInput');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                const query = e.target.value.toLowerCase();
+                let filtered = allFetchedLogs;
+
+                if (query) {
+                    filtered = allFetchedLogs.filter(log => {
+                        const isLock = log.dst_port === 2222;
+                        const device = isLock ? "smart door lock" : "smart plug";
+                        const protocol = isLock ? "ssh (port 2222)" : `telnet (port ${log.dst_port || 23})`;
+                        const ip = log.src_ip.toLowerCase();
+                     
+                        // Hidden search text, following the same risk mapping as above
+                        let risk = "no risk";
+                        if (log.eventid === 'cowrie.command.input' || (log.input && log.input !== 'N/A' && log.input.trim() !== '')) risk = "critical risk";
+                        else if (log.eventid === 'cowrie.login.success') risk = "high risk";
+                        else if (log.eventid === 'cowrie.login.failed') risk = "low risk";
+
+                        return ip.includes(query) || device.includes(query) || protocol.includes(query) || risk.includes(query);
+                    });
+                }
+                renderRecentTable(filtered.slice(0, 100));
+            });
+        }
+
+        const exportBtn = document.getElementById('exportRecentBtn');
+        if (exportBtn) {
+            exportBtn.addEventListener('click', () => {
+                const query = searchInput ? searchInput.value : '';
+                window.location.href = `${API_BASE}/export-logs?query=${encodeURIComponent(query)}&token=${localStorage.getItem('tar_token')}`;
+            });
+        }
+
+        // Refresh every panel on the page in one pass.
+        function updateAllDashboardData() {
+            fetchDashboardSummary();
+            fetchRecentActivity(); 
+        }
+
+        // Page start-up: wire the controls, draw the chart and start polling.
+        document.addEventListener('DOMContentLoaded', () => {
+            initChart();
+            updateAllDashboardData();
+            
+            // Polling: only request data while this tab is visible
+            setInterval(() => {
+                if (!document.hidden) updateAllDashboardData();
+            }, 15000);
+
+            // Refresh immediately when the user switches back to this tab
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) updateAllDashboardData();
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TAR Honeypot - Alerts</title>
+    <!-- Shared site-wide styles first, then this page's own overrides -->
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="alerts.css">
+</head>
+<body class="dashboard-body">
+
+    <div class="dashboard-container">
+
+        <aside class="sidebar">
+            <div class="sidebar-logo">
+                <button id="sidebarToggle" class="sidebar-toggle-btn">☰</button>
+                <div class="sidebar-logo-text">
+                    <h2>TAR Honeypot</h2>
+                    <p>IoT Monitoring System</p>
+                </div>
+            </div>
+
+            <nav class="sidebar-menu">
+                <a href="dashboard.html">Dashboard</a>
+                <a href="attack-logs.html">Attack Logs</a>
+                <a href="alerts.html" class="active">Alerts</a>
+                <a href="attacker-details.html">Attacker Details</a>
+                <a href="analytics.html">Analytics</a>
+                <a href="manage-users.html">Manage Users</a>
+                <a href="setting.html">Settings</a>
+                <a href="login.html">Logout</a>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <header class="topbar">
+                <div>
+                    <h1>IoT Security Alerts</h1>
+                    <p>Monitor physical-impact threats and critical device manipulation attempts</p>
+                </div>
+            </header>
+
+            <!-- Risk-level counters. The Critical and High cards are clickable and
+                 toggle a filter on the alert feed below. -->
+            <section class="summary-cards">
+                <div class="summary-card">
+                    <h3>Active Security Alerts</h3>
+                    <p id="totalAlerts">0</p>
+                    <span class="text-accent">High & Critical Risk Events</span>
+                </div>
+
+                <div class="summary-card card-critical is-clickable" id="card-critical" onclick="toggleLevelFilter('CRITICAL')"
+                     onmouseover="this.style.transform='translateY(-5px)'; this.style.boxShadow='0 8px 16px rgba(255, 77, 77, 0.15)'" 
+                     onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'">
+                    <h3>Malicious Payload</h3>
+                    <p id="criticalAlertsCount">0</p>
+                    <span class="text-critical">Critical Risk</span>
+                </div>
+
+                <div class="summary-card card-high is-clickable" id="card-high" onclick="toggleLevelFilter('HIGH')"
+                     onmouseover="this.style.transform='translateY(-5px)'; this.style.boxShadow='0 8px 16px rgba(255, 170, 0, 0.15)'" 
+                     onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'">
+                    <h3>Unauthorized Override</h3>
+                    <p id="highAlertsCount">0</p>
+                    <span class="text-high">High Risk</span>
+                </div>
+
+                <div class="summary-card card-low">
+                    <h3>Credential Stuffing</h3>
+                    <p id="lowAlertsCount">0</p>
+                    <span class="text-low">Low Risk</span>
+                </div>
+            </section>
+
+            <section class="alerts-layout">
+                <div class="dashboard-panel">
+                    <!-- Feed header: title and the pending/archived switch on the left,
+                         the archive and export actions on the right. -->
+                    <div class="alerts-header">
+                        <div class="alerts-title-group">
+                            <h2 class="heading-inline">Alert Notifications</h2>
+                            <select id="viewFilter" class="alerts-view-filter">
+                                <option value="pending">Pending Alerts</option>
+                                <option value="archived">Archived</option>
+                            </select>
+                        </div>
+                        <div>
+                            <button class="export-btn btn-archive" id="dismissBtn">Archive Read</button>
+                            <button class="export-btn" id="exportAlertsBtn">Export All</button>
+                        </div>
+                    </div>
+
+                    <!-- Alert cards are rendered into this container by renderAlerts() -->
+                    <div id="alertsContainer" class="alerts-scroll">
+                        <p class="alerts-placeholder">Scanning for critical threats...</p>
+                    </div>
+                </div>
+
+                <div class="alerts-side">
+                    <div class="dashboard-panel">
+                        <h2>Recommendation</h2>
+                        <ul class="alert-list" id="intelligenceList">
+                        </ul>
+                    </div>
+
+                    <div class="dashboard-panel">
+                        <h2>System Alert Status</h2>
+                        <div class="system-summary">
+                            <p><strong>Parsing Engine:</strong> <span id="alertParsingEngine">Loading...</span></p>
+                            <p><strong>Cowrie Event Stream:</strong> <span id="alertCowrieStream">Loading...</span></p>
+                            <p><strong>Last Alert Update:</strong> <span id="lastUpdateTime">Loading...</span></p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+    
+    <script>
+        // Global API guard: attaches the auth token to every request and forces a re-login when the session is no longer valid
+        const originalFetch = window.fetch;
+        window.fetch = async function() {
+            let [resource, config] = arguments;
+            
+            // Attach the Bearer token to every API call except the login request itself
+            if (typeof resource === 'string' && resource.includes('/api/') && !resource.includes('/api/login')) {
+                config = config || {};
+                config.headers = config.headers || {};
+                const token = localStorage.getItem('tar_token');
+                if (token) {
+                    config.headers['Authorization'] = `Bearer ${token}`;
+                }
+            }
+            
+            const response = await originalFetch(resource, config);
+            
+            // Token rejected (forged, or invalidated by a server restart) - send the user back to the login page
+            if (response.status === 401) {
+                alert("Session Expired or Unauthorized! Returning to login.");
+                localStorage.removeItem('tar_current_user');
+                localStorage.removeItem('tar_token');
+                window.location.href = 'login.html';
+            }
+            return response;
+        };
+        
+        const currentUser = JSON.parse(localStorage.getItem('tar_current_user'));
+        
+        if (!currentUser) {
+            window.location.href = 'login.html';
+        } else {
+            // Shared page logic: hide the admin-only sidebar links. No URL checks needed here
+            if (currentUser.role !== 'Administrator' && currentUser.role !== 'IT Manager') {
+                const manageUsersLink = document.querySelector('a[href="manage-users.html"]');
+                if (manageUsersLink) {
+                    manageUsersLink.style.display = 'none';
+                }
+            }
+        }
+
+        const sidebarToggle = document.getElementById('sidebarToggle');
+        const dashboardContainer = document.querySelector('.dashboard-container');
+        if(sidebarToggle) {
+            sidebarToggle.addEventListener('click', function() {
+                dashboardContainer.classList.toggle('sidebar-hidden');
+            });
+        }
+
+        let currentAlerts = []; 
+        let currentView = 'pending'; 
+        let currentLevelFilter = null; 
+
+        let readAlerts = JSON.parse(localStorage.getItem('tar_read_alerts')) || [];
+        let dismissedAlerts = JSON.parse(localStorage.getItem('tar_dismissed_alerts')) || [];
+
+        // Mark one alert as read, then open that attacker's forensic profile.
+        function handleAlertClick(ip, alertId) {
+            if (!readAlerts.includes(alertId)) {
+                readAlerts.push(alertId);
+                localStorage.setItem('tar_read_alerts', JSON.stringify(readAlerts));
+            }
+            window.location.href = `attacker-details.html?ip=${ip}`;
+        }
+
+        // Clicking the Critical or High summary card filters the feed to that
+        // level; clicking the same card again clears the filter.
+        function toggleLevelFilter(level) {
+            const critCard = document.getElementById('card-critical');
+            const highCard = document.getElementById('card-high');
+
+            if (currentLevelFilter === level) {
+                currentLevelFilter = null;
+                critCard.style.backgroundColor = '#fff';
+                highCard.style.backgroundColor = '#fff';
+            } else {
+                currentLevelFilter = level;
+                critCard.style.backgroundColor = level === 'CRITICAL' ? '#fff5f5' : '#fff';
+                highCard.style.backgroundColor = level === 'HIGH' ? '#fff8e6' : '#fff';
+            }
+            
+            renderAlertsList();
+        }
+
+        // Pull the raw event log and turn every high-risk event into an alert
+        // card, then refresh the counters and the recommendation panel.
+        async function fetchAndProcessAlerts() {
+            try {
+                const response = await fetch('http://127.0.0.1:5000/api/logs'); 
+                const logs = await response.json();
+                
+                let criticalCount = 0; 
+                let highCount = 0;     
+                let lowCount = 0;    
+                
+                currentAlerts = [];
+
+                logs.forEach(log => {
+                    const timeStr = new Date(log.timestamp).toLocaleTimeString(undefined);
+                    
+                    const hasPayload = log.input && log.input !== 'N/A' && log.input.trim() !== '';
+                    const isCommandEvent = log.eventid.startsWith('cowrie.command.');
+                    
+                    if (hasPayload || isCommandEvent) {
+                        criticalCount++;
+                        const cmd = hasPayload ? log.input : log.eventid;
+                        const decodedCmd = log.decoded_input || '';
+                        const decodedSuffix = decodedCmd
+                            ? ` <span style="color:#94a3b8; font-size:0.88em;">&#x1F50D; Decoded: <code style="color:#94a3b8;">${decodedCmd}</code></span>`
+                            : '';
+                        
+                        const isSsh = log.dst_port === 2222 || log.dst_port === 22;
+                        const alertType = isSsh
+                            ? 'SSH Command Execution (Smart Door Lock)'
+                            : 'Electrical State Manipulation (Smart Plug)';
+
+                        const alertId = btoa(encodeURIComponent(log.timestamp + "_" + log.src_ip + "_" + cmd));
+                        
+                        currentAlerts.push({ 
+                            id: alertId, 
+                            level: 'CRITICAL', 
+                            type: alertType, 
+                            desc: `Critical execution detected from IP <strong>${log.src_ip}</strong>. Attempted command payload: <code style="color:#d9534f;">${cmd}</code>${decodedSuffix}.`, 
+                            time: timeStr, 
+                            rawTimestamp: log.timestamp, 
+                            ip: log.src_ip,
+                            port: log.dst_port,
+                            eventid: log.eventid, 
+                            credentials: 'N/A',            
+                            payload: cmd                   
+                        });
+                    } else if (log.eventid === 'cowrie.login.success') {
+                        highCount++;
+                        const usr = log.username && log.username !== 'N/A' ? log.username : '';
+                        const pwd = log.password && log.password !== 'N/A' ? log.password : '';
+
+                        const isSsh = log.dst_port === 2222 || log.dst_port === 22;
+                        const highType = isSsh
+                            ? 'Mechanical Solenoid Trigger (Smart Door Lock)'
+                            : 'Electrical Auth Bypass (Smart Plug)';
+                        
+                        const alertId = btoa(encodeURIComponent(log.timestamp + "_" + log.src_ip + "_" + usr + "_" + pwd));
+                        
+                        currentAlerts.push({ 
+                            id: alertId, 
+                            level: 'HIGH', 
+                            type: highType, 
+                            desc: `Perimeter breach detected. Attacker from IP <strong>${log.src_ip}</strong> successfully bypassed authentication. Credentials used: ${usr}/${pwd}.`, 
+                            time: timeStr, 
+                            rawTimestamp: log.timestamp, 
+                            ip: log.src_ip,
+                            port: log.dst_port,
+                            eventid: log.eventid, 
+                            credentials: `${usr} / ${pwd}`, 
+                            payload: 'N/A'                 
+                        });
+                    } else if (log.eventid === 'cowrie.login.failed') {
+                        lowCount++;
+                    }
+                });
+
+                document.getElementById('totalAlerts').textContent = (criticalCount + highCount).toLocaleString();
+                document.getElementById('criticalAlertsCount').textContent = criticalCount.toLocaleString();
+                document.getElementById('highAlertsCount').textContent = highCount.toLocaleString();
+                document.getElementById('lowAlertsCount').textContent = lowCount.toLocaleString();
+
+                renderAlertsList();
+
+                const intelList = document.getElementById('intelligenceList');
+                intelList.innerHTML = '';
+                if (criticalCount > 0) {
+                    intelList.innerHTML += `<li style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #eee;"><strong style="color: #ff4d4d; display: block; margin-bottom: 4px;">Quarantine Affected IoT Nodes</strong><span style="font-size: 0.9em; color: #555;"><b>Remote Payload Injection</b> detected. Isolate the compromised smart devices immediately and extract the injected hexadecimal payloads for malware analysis.</span></li>`;
+                }
+                if (highCount > 0) {
+                    intelList.innerHTML += `<li><strong style="color: #ffaa00; display: block; margin-bottom: 4px;">Revoke Exposed IoT Credentials</strong><span style="font-size: 0.9em; color: #555;"><b>Unauthorized Override</b> achieved. Attackers have bypassed authentication. Immediately invalidate default firmware passwords and block the identified source IPs at your perimeter firewall.</span></li>`;
+                }
+                if (criticalCount === 0 && highCount === 0) {
+                    intelList.innerHTML = '<li><span style="color: #555;">No Critical or High risk threats detected. Continue monitoring background IoT probing (Credential Stuffing).</span></li>';
+                }
+
+                document.getElementById('lastUpdateTime').textContent = new Date().toLocaleString(undefined);
+
+                // Fetch live system status for alert page
+                try {
+                    const statusRes = await fetch('http://127.0.0.1:5000/api/system-status');
+                    const statusData = await statusRes.json();
+                    const parsingEl = document.getElementById('alertParsingEngine');
+                    const cowrieEl = document.getElementById('alertCowrieStream');
+                    if (parsingEl) {
+                        parsingEl.textContent = statusData.pandas_engine;
+                        parsingEl.style.color = statusData.pandas_engine === 'Active' ? '#16a34a' : '#dc2626';
+                    }
+                    if (cowrieEl) {
+                        cowrieEl.textContent = statusData.cowrie_stream;
+                        cowrieEl.style.color = statusData.cowrie_stream === 'Connected' ? '#16a34a' : '#dc2626';
+                    }
+                } catch(e) {
+                    const parsingEl = document.getElementById('alertParsingEngine');
+                    const cowrieEl = document.getElementById('alertCowrieStream');
+                    if (parsingEl) { parsingEl.textContent = 'Error'; parsingEl.style.color = '#dc2626'; }
+                    if (cowrieEl) { cowrieEl.textContent = 'Error'; cowrieEl.style.color = '#dc2626'; }
+                }
+            } catch (error) {
+                console.error("Failed to load pipeline alerts:", error);
+                // ❌ Flask offline — set all status fields to disconnected
+                const parsingEl = document.getElementById('alertParsingEngine');
+                const cowrieEl = document.getElementById('alertCowrieStream');
+                const lastUpdateEl = document.getElementById('lastUpdateTime');
+                if (parsingEl) { parsingEl.textContent = 'Offline'; parsingEl.style.color = '#dc2626'; }
+                if (cowrieEl) { cowrieEl.textContent = 'Disconnected'; cowrieEl.style.color = '#dc2626'; }
+                if (lastUpdateEl) { lastUpdateEl.textContent = 'Disconnected'; lastUpdateEl.style.color = '#dc2626'; }
+            }
+        }
+
+        // Draw the alert feed for the current level filter and the selected
+        // pending / archived view.
+        function renderAlertsList() {
+            const alertsContainer = document.getElementById('alertsContainer');
+            alertsContainer.innerHTML = '';
+
+            currentAlerts.sort((a, b) => new Date(b.rawTimestamp) - new Date(a.rawTimestamp));
+            
+            let filteredAlerts = [];
+            const dismissBtn = document.getElementById('dismissBtn');
+
+            if (currentView === 'pending') {
+                filteredAlerts = currentAlerts.filter(alert => !dismissedAlerts.includes(alert.id));
+                if (dismissBtn) dismissBtn.style.display = 'inline-block'; 
+            } else {
+                filteredAlerts = currentAlerts.filter(alert => dismissedAlerts.includes(alert.id));
+                if (dismissBtn) dismissBtn.style.display = 'none'; 
+            }
+
+            if (currentLevelFilter !== null) {
+                filteredAlerts = filteredAlerts.filter(alert => alert.level === currentLevelFilter);
+            }
+            
+            const topAlertsToDisplay = filteredAlerts.slice(0, 50);
+
+            if (topAlertsToDisplay.length === 0) {
+                let emptyMsg = currentView === 'pending' ? 'All clear. No alerts found in this category.' : 'No archived alerts found.';
+                alertsContainer.innerHTML = `<p style="text-align: center; color: #666; padding: 20px;">${emptyMsg}</p>`;
+            } else {
+                topAlertsToDisplay.forEach(alert => {
+                    const isCritical = alert.level === 'CRITICAL';
+                    const color = isCritical ? '#ff4d4d' : '#ffaa00';
+                    const cssClass = isCritical ? 'high-alert' : 'medium-alert';
+                    const textClass = isCritical ? 'high-text' : 'medium-text';
+
+                    const isRead = readAlerts.includes(alert.id) || currentView === 'archived';
+                    const visualStyle = isRead ? 'opacity: 0.6; filter: grayscale(20%);' : 'opacity: 1;';
+                    const hoverEffect = 'onmouseover="this.style.transform=\'scale(1.01)\'" onmouseout="this.style.transform=\'scale(1)\'"';
+
+                    alertsContainer.innerHTML += `
+                        <div class="alert-card ${cssClass}" 
+                             onclick="handleAlertClick('${alert.ip}', '${alert.id}')"
+                             ${hoverEffect}
+                             style="border-left: 4px solid ${color}; margin-bottom: 15px; background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); cursor: pointer; transition: 0.2s; ${visualStyle}">
+                            <div class="alert-top" style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                <span class="alert-level ${textClass}" style="color: ${color}; font-weight: bold; font-size: 1em;">${alert.level}: ${alert.type}</span>
+                                <span class="alert-time" style="color: #888; font-size: 0.85em;">${alert.time}</span>
+                            </div>
+                            <p style="margin: 5px 0 0 0; color: #666; font-size: 0.9em; line-height: 1.5;">${alert.desc}</p>
+                        </div>
+                    `;
+                });
+            }
+        }
+
+        const exportBtn = document.getElementById('exportAlertsBtn');
+        if (exportBtn) {
+            exportBtn.addEventListener('click', () => {
+                const risk = currentLevelFilter || 'All';
+                let queryStr = `type=alerts&risk=${encodeURIComponent(risk)}&token=${localStorage.getItem('tar_token')}`;
+                window.location.href = `http://127.0.0.1:5000/api/export-logs?${queryStr}`;
+            });
+        }
+
+        const dismissBtn = document.getElementById('dismissBtn');
+        if(dismissBtn) {
+            dismissBtn.addEventListener('click', () => {
+                dismissedAlerts = [...new Set([...dismissedAlerts, ...readAlerts])];
+                localStorage.setItem('tar_dismissed_alerts', JSON.stringify(dismissedAlerts));
+                readAlerts = [];
+                localStorage.setItem('tar_read_alerts', JSON.stringify(readAlerts));
+                
+                renderAlertsList();
+            });
+        }
+
+        const viewFilter = document.getElementById('viewFilter');
+        if (viewFilter) {
+            viewFilter.addEventListener('change', (e) => {
+                currentView = e.target.value;
+                renderAlertsList();
+            });
+        }
+
+        // Page start-up: wire the controls and begin polling for new alerts.
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchAndProcessAlerts();
+            
+            setInterval(() => {
+                if (!document.hidden) fetchAndProcessAlerts();
+            }, 60000);
+
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) fetchAndProcessAlerts();
+            });
+        });
+    </script>
+</body>
+</html>

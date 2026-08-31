@@ -1,0 +1,130 @@
+/* =========================================================
+   manage-users.css
+   Page-only styles for manage-users.html.
+   Loaded after style.css. Note that .save-btn below is a
+   deliberate override of the gradient button in style.css:
+   inside this modal the button is a flat blue. Keeping it in
+   this file means setting.html keeps the gradient version.
+   ========================================================= */
+
+/* ---------------------------------------------------------
+   ADD / EDIT USER MODAL
+   --------------------------------------------------------- */
+
+/* Full-screen dimmed backdrop. Hidden until the script switches
+   display to 'flex', which then centres the dialog via the
+   justify-content / align-items pair below. */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(15, 23, 42, 0.6);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+}
+
+/* The white dialog card itself. */
+.modal-content {
+    background: #fff;
+    padding: 25px 30px;
+    border-radius: 12px;
+    width: 400px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+}
+
+/* Title row: heading on the left, close button on the right. */
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.modal-header h2 {
+    margin: 0;
+    font-size: 1.25rem;
+    color: #0f172a;
+}
+
+/* The "x" that dismisses the dialog. */
+.close-btn {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #64748b;
+}
+
+/* ---------------------------------------------------------
+   MODAL FORM FIELDS
+   --------------------------------------------------------- */
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: #334155;
+    font-size: 0.9em;
+}
+
+.form-group input,
+.form-group select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    outline: none;
+    box-sizing: border-box;
+}
+
+/* ---------------------------------------------------------
+   MODAL BUTTONS
+   --------------------------------------------------------- */
+
+/* Right-aligned button row at the bottom of the dialog. */
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 25px;
+}
+
+.cancel-btn {
+    padding: 8px 15px;
+    background: #e2e8f0;
+    color: #475569;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+/* Flat blue submit button. Overrides the gradient .save-btn in style.css
+   for this page only. */
+.save-btn {
+    padding: 8px 15px;
+    background: #2563eb;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+/* Greyed-out placeholder shown in the Actions column where the current
+   operator is not allowed to edit or delete that row. */
+.btn-disabled {
+    padding: 5px 10px;
+    background: #e2e8f0;
+    color: #94a3b8;
+    border: none;
+    border-radius: 4px;
+    cursor: not-allowed;
+}

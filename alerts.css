@@ -1,0 +1,64 @@
+/* =========================================================
+   alerts.css
+   Page-only styles for alerts.html.
+   Loaded after style.css. The severity colours on the summary
+   cards (.card-critical, .text-high, …) are shared helpers and
+   live in style.css, because Dashboard and Analytics reuse them.
+   ========================================================= */
+
+/* ---------------------------------------------------------
+   ALERT FEED PANEL HEADER
+   --------------------------------------------------------- */
+
+/* Same flex row as the shared .alerts-header, but this page packs the
+   feed a little tighter than the site default of 20px. */
+.alerts-header {
+    margin-bottom: 15px;
+}
+
+/* Left-hand side of that header: the "Alert Notifications" heading
+   sitting next to the pending/archived dropdown. */
+.alerts-title-group {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+/* Dropdown that switches the feed between pending and archived alerts. */
+.alerts-view-filter {
+    padding: 5px 10px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    outline: none;
+    font-weight: bold;
+    color: #333;
+    background: #f8f9fa;
+}
+
+/* Secondary grey action next to the blue "Export All" button. Only the
+   background colour and spacing differ from the shared .export-btn. */
+.btn-archive {
+    background-color: #6c757d;
+    margin-right: 10px;
+}
+
+/* ---------------------------------------------------------
+   ALERT FEED BODY
+   --------------------------------------------------------- */
+
+/* Scrolling list of alert cards. Capped so the recommendation panel
+   beside it stays visible instead of being pushed off-screen. The right
+   padding keeps the cards clear of the scrollbar. */
+.alerts-scroll {
+    max-height: 500px;
+    overflow-y: auto;
+    padding-right: 8px;
+}
+
+/* Centred "Scanning for critical threats…" message shown inside the feed
+   before the first batch of alerts is rendered. */
+.alerts-placeholder {
+    text-align: center;
+    color: #888;
+    padding: 20px;
+}

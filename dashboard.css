@@ -1,0 +1,256 @@
+/* =========================================================
+   dashboard.css
+   Page-only styles for dashboard.html.
+   Loaded after style.css. The severity colours on the summary
+   cards, the sticky table header and the "Loading…" cell come
+   from the shared helpers in style.css; everything below is
+   specific to the dashboard's own widgets.
+   ========================================================= */
+
+/* ---------------------------------------------------------
+   SUMMARY CARDS
+   --------------------------------------------------------- */
+
+/* Card heading laid out as a row, so a title and a trailing badge can sit
+   on the same line. */
+.card-heading-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* ---------------------------------------------------------
+   RECENT ATTACK ACTIVITY PANEL
+   --------------------------------------------------------- */
+
+/* Panel title on the left, search box and export button on the right. */
+.panel-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+/* Groups the controls on the right-hand side of that row. */
+.panel-header-actions {
+    display: flex;
+    gap: 10px;
+}
+
+/* Client-side filter box for the table underneath. */
+.recent-search-input {
+    padding: 6px 8px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    outline: none;
+    font-size: 13px;
+    min-width: 210px;
+}
+
+/* Smaller, flat-blue version of the shared .export-btn so the button fits
+   inside the panel header instead of the page header. The darker hover
+   colour is applied inline by the button's own event handlers. */
+.export-btn-compact {
+    padding: 6px 15px;
+    font-size: 13px;
+    background: #2563eb;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+/* Height cap for the activity table. Pair with .is-scrollable from
+   style.css for the scrollbars, border and rounded corners. */
+.recent-activity-scroll {
+    max-height: 675px;
+}
+
+/* Unlike the attack-logs table, this one must never scroll sideways: it
+   lives in a grid cell beside other panels, so it is pinned to the width of
+   its container and long values wrap instead. !important is needed to beat
+   the 800px floor that .logs-table sets. */
+.recent-activity-table {
+    width: 100%;
+    min-width: 100% !important;
+    table-layout: auto;
+    border-collapse: collapse;
+    text-align: left;
+    word-wrap: break-word;
+}
+
+.recent-activity-table thead th {
+    padding: 12px;
+}
+
+/* Column widths, adding up to 100%. */
+.recent-activity-table .col-time     { width: 18%; }
+.recent-activity-table .col-ip       { width: 22%; }
+.recent-activity-table .col-device   { width: 22%; }
+.recent-activity-table .col-protocol { width: 20%; }
+.recent-activity-table .col-risk     { width: 18%; }
+
+/* ---------------------------------------------------------
+   PHYSICAL ALERT CATEGORY
+   Clickable rows that jump to Attack Logs pre-filtered on the
+   risk level they represent.
+   --------------------------------------------------------- */
+
+/* Tighter, squarer variant of .protocol-item that reads as a button. The
+   scale-up on hover is applied inline by the row's own event handlers. */
+.quick-filter {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+/* Last row in the group: drop the trailing gap. */
+.quick-filter.is-last {
+    margin-bottom: 0;
+}
+
+/* Severity tints. Each level sets the row background plus the text colours
+   of the label and the count it contains. */
+.quick-filter.level-critical {
+    background: #fff5f5;
+    border: 1px solid #ffcccc;
+}
+
+.quick-filter.level-high {
+    background: #fff8e6;
+    border: 1px solid #ffe5b4;
+}
+
+.quick-filter.level-low {
+    background: #e0f2fe;
+    border: 1px solid #bae6fd;
+}
+
+.quick-filter.level-none {
+    background: #f8f9fa;
+    border: 1px solid #e2e8f0;
+}
+
+/* Category name on the left of the row. */
+.quick-filter-label {
+    font-weight: 500;
+}
+
+/* Event count on the right. Sized up slightly so the number reads first.
+   Written as a descendant of .quick-filter so it outranks the shared
+   `.protocol-item strong` colour. */
+.quick-filter .quick-filter-count {
+    font-size: 1.2em;
+}
+
+.quick-filter.level-critical .quick-filter-label,
+.quick-filter.level-critical .quick-filter-count {
+    color: #cc0000;
+}
+
+.quick-filter.level-high .quick-filter-label,
+.quick-filter.level-high .quick-filter-count {
+    color: #d97706;
+}
+
+.quick-filter.level-low .quick-filter-label,
+.quick-filter.level-low .quick-filter-count {
+    color: #0369a1;
+}
+
+.quick-filter.level-none .quick-filter-label {
+    color: #64748b;
+}
+
+.quick-filter.level-none .quick-filter-count {
+    color: #475569;
+}
+
+/* ---------------------------------------------------------
+   TOP TARGETED IoT DEVICES
+   --------------------------------------------------------- */
+
+/* Chart.js sizes its canvas against the parent, so the doughnut needs a
+   parent with an explicit height. */
+.doughnut-box {
+    position: relative;
+    height: 160px;
+    margin: 10px 0;
+}
+
+/* Breakdown listed underneath the doughnut. */
+.device-stats {
+    margin-top: 20px;
+}
+
+/* Hand-built legend, centred under the chart. */
+.device-legend {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    margin-bottom: 15px;
+}
+
+/* One colour swatch plus its caption. */
+.device-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* The small square of colour matching a doughnut segment. */
+.device-legend-swatch {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+}
+
+.device-legend-swatch.is-lock {
+    background-color: #ff4d4d;
+}
+
+.device-legend-swatch.is-plug {
+    background-color: #ffaa00;
+}
+
+.device-legend-label {
+    font-size: 0.9em;
+    color: #555;
+}
+
+/* Clickable device rows, same idea as .quick-filter but neutral coloured
+   and slightly wider padding. The hover scale is applied inline by the
+   row's own event handlers. */
+.device-filter {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f8f9fa;
+    padding: 10px 15px;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.device-filter.is-last {
+    margin-bottom: 0;
+}
+
+.device-filter-label {
+    color: #666;
+    font-weight: 500;
+}
+
+/* Descendant selector so it outranks the shared `.protocol-item strong`. */
+.device-filter .device-filter-count {
+    font-size: 1.1em;
+    color: #333;
+}

@@ -1,0 +1,42 @@
+[
+    {
+        "id": 1,
+        "name": "manager",
+        "email": "manager@gmail.com",
+        "password": "manager",
+        "role": "IT Manager",
+        "status": "Active",
+        "notification": "Enabled",
+        "lastLogin": "2026-08-31 23:43"
+    },
+    {
+        "id": 2,
+        "name": "Admin",
+        "email": "neoch-wp23@student.tarc.edu.my",
+        "password": "admin",
+        "role": "Administrator",
+        "status": "Active",
+        "notification": "Disabled",
+        "lastLogin": "2026-08-27 13:08"
+    },
+    {
+        "id": 3,
+        "name": "ching",
+        "email": "ching@gmail.com",
+        "password": "Ilove.ccc04",
+        "role": "Administrator",
+        "status": "Active",
+        "notification": "Enabled",
+        "lastLogin": "2026-08-08 22:55"
+    },
+    {
+        "id": 4,
+        "name": "neo",
+        "email": "cheehao0331@gmail.com",
+        "password": "0189470566_Hao",
+        "role": "Security Technicians",
+        "status": "Active",
+        "notification": "Disabled",
+        "lastLogin": "2026-08-14 03:13"
+    }
+]

@@ -1,0 +1,53 @@
+/* =========================================================
+   setting.css
+   Page-only styles for setting.html.
+   Loaded after style.css so the overrides below win by source
+   order. Shared pieces (.alert-box, .inline-error) now live in
+   style.css because login.html and manage-users.html reuse them.
+   ========================================================= */
+
+/* ---------------------------------------------------------
+   PAGE LAYOUT
+   Two columns that reflow onto one another on narrow screens.
+   Flexbox is used instead of the site-wide grid so the two
+   columns can grow independently without the panels shifting.
+   --------------------------------------------------------- */
+.settings-layout {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    align-items: flex-start;
+}
+
+/* Left column: profile details and the change-password form. */
+.settings-left {
+    flex: 2;
+    min-width: 400px;
+}
+
+/* Right column: notification preference and the account summary,
+   stacked vertically. */
+.settings-right {
+    flex: 1;
+    min-width: 300px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* ---------------------------------------------------------
+   FORM DETAILS
+   --------------------------------------------------------- */
+
+/* Horizontal rule separating "User Account" from "Change Password". */
+.form-divider {
+    margin: 30px 0;
+    border: 0;
+    border-top: 1px solid #e2e8f0;
+}
+
+/* The flex columns already control the spacing between panels here, so
+   clear the default panel margin to stop the cards drifting apart. */
+.dashboard-panel {
+    margin: 0;
+}

@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TAR Honeypot - Analytics</title>
+    <!-- Shared site-wide styles first, then this page's own overrides -->
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="analytics.css">
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+
+</head>
+<body class="dashboard-body">
+
+    <div class="dashboard-container">
+
+        <aside class="sidebar">
+            <div class="sidebar-logo">
+                <button id="sidebarToggle" class="sidebar-toggle-btn">☰</button>
+                <div class="sidebar-logo-text">
+                    <h2>TAR Honeypot</h2>
+                    <p>IoT Monitoring System</p>
+                </div>
+            </div>
+
+            <nav class="sidebar-menu">
+                <a href="dashboard.html">Dashboard</a>
+                <a href="attack-logs.html">Attack Logs</a>
+                <a href="alerts.html">Alerts</a>
+                <a href="attacker-details.html">Attacker Details</a>
+                <a href="analytics.html" class="active">Analytics</a>
+                <a href="manage-users.html">Manage Users</a>
+                <a href="setting.html">Settings</a>
+                <a href="login.html">Logout</a>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <header class="topbar">
+                <div>
+                    <h1>Physical Threat Analytics</h1>
+                    <p>Statistical overview of captured attacker behaviour targeting smart home infrastructure</p>
+                </div>
+            </header>
+
+            <!-- Headline figures for the whole capture window -->
+            <section class="summary-cards">
+                <div class="summary-card">
+                    <h3>Total IoT Attack Events</h3>
+                    <p id="summaryTotal">0</p>
+                    <span class="text-info">All captured activity</span>
+                </div>
+
+                <div class="summary-card">
+                    <h3>Most Targeted Device</h3>
+                    <p id="summaryDevice" class="summary-value-md">Loading...</p>
+                    <span class="text-info">Physical access risk</span>
+                </div>
+
+                <div class="summary-card">
+                    <h3>Top Attack Method</h3>
+                    <p id="summaryRisk" class="summary-value-sm">Loading...</p>
+                    <span class="text-info">Dominant strategy</span>
+                </div>
+
+                <div class="summary-card card-critical">
+                    <h3>Physical Disruptions</h3>
+                    <p id="summaryDisruptions">0</p>
+                    <span class="text-critical">Critical payloads executed</span>
+                </div>
+            </section>
+            
+            <!-- Chart area. analytics.css turns .dashboard-grid into a vertical
+                 stack, and each .analytics-row splits into a wide panel plus a
+                 narrow one that wrap apart on small screens. -->
+            <section class="dashboard-grid">
+                
+                <!-- Row 1. The 1.7 ratio lines the divider between these two panels
+                     up with the centre of the third summary card above. -->
+                <div class="analytics-row">
+                    <div class="dashboard-panel analytics-panel panel-wide">
+                        <h2>Historical Attack Frequency Trend</h2>
+                        <div class="analytics-chart-box">
+                            <canvas id="bruteForceTrendChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-panel analytics-panel panel-narrow">
+                        <h2>Peak Attack Hours</h2>
+                        <div class="analytics-chart-box">
+                            <canvas id="peakHoursChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Row 2. Same 1.7 ratio so this row lines up with the one above. -->
+                <div class="analytics-row is-stretch">
+                    <div class="dashboard-panel analytics-panel panel-wide is-column">
+                        <h2>Attacker Geographical Origins</h2>
+                        <div id="geoOriginsMap" class="geo-map"></div>
+                    </div>
+
+                    <div class="dashboard-panel analytics-panel panel-narrow is-column">
+                        <h2>Most Exploited Default Credentials</h2>
+                        <div class="list-frame">
+                            <div id="credentialsContainer" class="scrollable-container scroll-fill">
+                                <div class="list-item-modern is-placeholder">
+                                    <span class="text-muted">Analyzing credentials...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Physical Intent Classification + High-Risk Commands -->
+                <div class="analytics-row is-stretch">
+                    <div class="dashboard-panel analytics-panel panel-wide is-column">
+                        <h2>Most Common Physical Intent</h2>
+                        <div id="intentsContainer" class="flex-fill">
+                            <div class="list-item-modern is-placeholder">
+                                <span class="text-muted">Classifying intents...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-panel analytics-panel panel-narrow is-column">
+                        <h2>High-Risk Commands Executed</h2>
+                        <div class="list-frame is-short">
+                            <div id="commandsContainer" class="scrollable-container scroll-fill">
+                                <div class="list-item-modern is-placeholder">
+                                    <span class="text-muted">Scanning payloads...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Command Analysis & Threat Intelligence -->
+                <div class="analytics-row is-stretch">
+                    <div class="dashboard-panel analytics-panel panel-full is-column">
+                        <h2>Command Analysis &amp; Threat Intelligence</h2>
+                        <div id="aiInsights" class="insights-body">
+                            <div class="insights-row">
+                                <p class="text-slate">Loading dynamic threat intelligence...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </section>
+        </main>
+    </div>
+
+    <script>
+// Global API guard: attaches the auth token to every request and forces a re-login when the session is no longer valid
+        const originalFetch = window.fetch;
+        window.fetch = async function() {
+            let [resource, config] = arguments;
+            
+            // Attach the Bearer token to every API call except the login request itself
+            if (typeof resource === 'string' && resource.includes('/api/') && !resource.includes('/api/login')) {
+                config = config || {};
+                config.headers = config.headers || {};
+                const token = localStorage.getItem('tar_token');
+                if (token) {
+                    config.headers['Authorization'] = `Bearer ${token}`;
+                }
+            }
+            
+            const response = await originalFetch(resource, config);
+            
+            // Token rejected (forged, or invalidated by a server restart) - send the user back to the login page
+            if (response.status === 401) {
+                alert("Session Expired or Unauthorized! Returning to login.");
+                localStorage.removeItem('tar_current_user');
+                localStorage.removeItem('tar_token');
+                window.location.href = 'login.html';
+            }
+            return response;
+        };
+
+        const currentUser = JSON.parse(localStorage.getItem('tar_current_user'));
+        
+        if (!currentUser) {
+            window.location.href = 'login.html';
+        } else {
+            // Shared page logic: hide the admin-only sidebar links. No URL checks needed here
+            if (currentUser.role !== 'Administrator' && currentUser.role !== 'IT Manager') {
+                const manageUsersLink = document.querySelector('a[href="manage-users.html"]');
+                if (manageUsersLink) {
+                    manageUsersLink.style.display = 'none';
+                }
+            }
+        }
+
+        const sidebarToggle = document.getElementById('sidebarToggle');
+        const dashboardContainer = document.querySelector('.dashboard-container');
+
+        if(sidebarToggle) {
+            sidebarToggle.addEventListener('click', function() {
+                dashboardContainer.classList.toggle('sidebar-hidden');
+            });
+        }
+
+        let trendChartObj = null;
+        let peakHoursChartObj = null; 
+
+        // Create the empty Chart.js trend and peak-hour charts. They are drawn
+        // with no data; loadAnalyticsData() fills them in once the API responds.
+        function initCharts() {
+            // Line chart: attack volume over time
+            const trendCtx = document.getElementById('bruteForceTrendChart').getContext('2d');
+            let gradient = trendCtx.createLinearGradient(0, 0, 0, 320);
+            gradient.addColorStop(0, 'rgba(59, 130, 246, 0.4)'); 
+            gradient.addColorStop(1, 'rgba(59, 130, 246, 0.0)'); 
+
+            trendChartObj = new Chart(trendCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Total Threat Events',
+                        data: [],
+                        borderColor: '#3b82f6',
+                        backgroundColor: gradient,
+                        borderWidth: 3,
+                        pointBackgroundColor: '#ffffff',
+                        pointBorderColor: '#3b82f6',
+                        pointBorderWidth: 2,
+                        pointRadius: 4,
+                        fill: true,
+                        tension: 0.4 
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1e293b', titleFont: { size: 13 }, bodyFont: { size: 14, weight: 'bold' }, padding: 10, cornerRadius: 8 } },
+                    scales: {
+                        y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(0,0,0,0.04)' }, beginAtZero: true },
+                        x: { ticks: { color: '#94a3b8' }, grid: { display: false } }
+                    }
+                }
+            });
+
+            // Bar chart: attack count per hour of the day
+            const peakCtx = document.getElementById('peakHoursChart').getContext('2d');
+            peakHoursChartObj = new Chart(peakCtx, {
+                type: 'bar',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Attack Intensity',
+                        data: [],
+                        backgroundColor: '#f59e0b', 
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1e293b', padding: 10, cornerRadius: 8 } },
+                    scales: {
+                        y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(0,0,0,0.04)' }, beginAtZero: true },
+                        x: { ticks: { color: '#94a3b8', maxRotation: 45, minRotation: 45 }, grid: { display: false } } 
+                    }
+                }
+            });
+        }
+
+        // Fetch the aggregated analytics in one request and populate every
+        // summary card, chart, list and the geographical map.
+        async function loadAnalyticsData() {
+            try {
+                const response = await fetch('http://127.0.0.1:5000/api/analytics-data');
+                const data = await response.json();
+
+                document.getElementById('summaryTotal').textContent = data.summary.total.toLocaleString();
+                document.getElementById('summaryDevice').textContent = data.summary.top_device;
+                document.getElementById('summaryRisk').textContent = data.summary.top_risk;
+                document.getElementById('summaryDisruptions').textContent = data.summary.disruptions.toLocaleString();
+
+                const credentialsContainer = document.getElementById('credentialsContainer');
+                credentialsContainer.innerHTML = '';
+                if(data.top_credentials.length === 0){
+                    credentialsContainer.innerHTML = '<div class="list-item-modern" style="background: #f8fafc; border: 1px solid #f1f5f9;"><span style="color:#888;">No credentials captured.</span></div>';
+                } else {
+                    data.top_credentials.forEach(cred => {
+                        credentialsContainer.innerHTML += `
+                            <div class="list-item-modern" style="background: #f8fafc; border: 1px solid #f1f5f9; align-items: center;">
+                                <span class="clamp-2-lines" style="font-family: 'Courier New', Courier, monospace; color: #f59e0b; font-weight: bold; font-size: 0.95em;" title="${cred.pair}">${cred.pair}</span>
+                                <strong style="color: #0f172a; font-size: 0.95em; white-space: nowrap; flex-shrink: 0;">${cred.count.toLocaleString()} times</strong>
+                            </div>`;
+                    });
+                }
+                const intentsContainer = document.getElementById('intentsContainer');
+                intentsContainer.innerHTML = '';
+                const intentMeta = {
+                    "Unauthorized Override":    { color: '#f97316', label: 'Successful Authentication Bypass' },
+                    "Remote Payload Injection": { color: '#ef4444', label: 'Malware / Botnet Script Injection' },
+                    "Credential Stuffing":      { color: '#3b82f6', label: 'Automated Login Bruteforce' },
+                };
+
+                // Custom named hover labels per segment per intent
+                const customHover = {
+                    "Unauthorized Override":    { lock: 'Mechanical Solenoid Trigger (Smart Door Lock)', plug: 'Electrical Auth Bypass (Smart Plug)' },
+                    "Remote Payload Injection": { lock: 'SSH Command Execution (Smart Door Lock)', plug: 'Electrical State Manipulation (Smart Plug)' },
+                    "Credential Stuffing":      { lock: 'Credential Stuffing — Smart Door Lock', plug: 'Credential Stuffing — Smart Plug' },
+                };
+
+                // Only display the 3 main categories, sorted by count descending
+                const displayOrder = ['Unauthorized Override', 'Remote Payload Injection', 'Credential Stuffing'];
+
+                if (data.intents.length === 0) {
+                    intentsContainer.innerHTML = '<div class="list-item-modern" style="background:#f8fafc; border:1px solid #f1f5f9;"><span style="color:#888;">No attack intents classified yet.</span></div>';
+                } else {
+                    // Build lookup from full backend data
+                    const intentDataMap = {};
+                    data.intents.forEach(i => { intentDataMap[i.name] = i; });
+
+                    // Build display list (only 3 main rows), sorted by count descending
+                    const displayIntents = displayOrder
+                        .map(n => intentDataMap[n])
+                        .filter(Boolean)
+                        .sort((a, b) => b.count - a.count);
+                    const maxCount = displayIntents.length > 0 ? Math.max(...displayIntents.map(i => i.count)) : 1;
+
+                    displayIntents.forEach(intent => {
+                        const meta = intentMeta[intent.name] || { color: '#64748b', label: intent.name };
+                        const hover = customHover[intent.name] || {};
+                        
+                        // Calculate percentage widths based on breakdown
+                        const lockCount = (intent.breakdown && intent.breakdown.lock) ? intent.breakdown.lock : 0;
+                        const plugCount = (intent.breakdown && intent.breakdown.plug) ? intent.breakdown.plug : 0;
+                        
+                        const lockPct = maxCount > 0 ? (lockCount / maxCount) * 100 : 0;
+                        const plugPct = maxCount > 0 ? (plugCount / maxCount) * 100 : 0;
+                        
+                        // Segment colors per intent
+                        let lockColor = meta.color;
+                        let plugColor = meta.color;
+                        
+                        if (intent.name === 'Unauthorized Override') {
+                            lockColor = '#fbbf24'; // Yellow (Smart Door Lock — Solenoid Trigger)
+                            plugColor = '#f97316'; // Orange (Smart Plug — Auth Bypass)
+                        } else if (intent.name === 'Remote Payload Injection') {
+                            lockColor = '#ef4444'; // Red (SSH side)
+                            plugColor = '#b91c1c'; // Crimson (Telnet side)
+                        } else if (intent.name === 'Credential Stuffing') {
+                            lockColor = '#0ea5e9'; // Sky blue (unchanged)
+                            plugColor = '#4f46e5'; // Indigo (unchanged)
+                        }
+
+                        let barHtml = '';
+                        if (lockCount > 0) {
+                            const lockLabel = hover.lock || `Smart Door Lock`;
+                            barHtml += `<div title="${lockLabel}: ${lockCount.toLocaleString()} events" style="width:${lockPct}%; height:100%; background:${lockColor}; transition:width 0.5s ease;"></div>`;
+                        }
+                        if (plugCount > 0) {
+                            const plugLabel = hover.plug || `Smart Plug`;
+                            barHtml += `<div title="${plugLabel}: ${plugCount.toLocaleString()} events" style="width:${plugPct}%; height:100%; background:${plugColor}; transition:width 0.5s ease;"></div>`;
+                        }
+
+                        intentsContainer.innerHTML += `
+                            <div style="margin-bottom:14px;">
+                                <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:5px;">
+                                    <div>
+                                        <span style="font-weight:600; color:${meta.color}; font-size:0.97em;">${intent.name}</span><br>
+                                        <span style="font-size:0.8em; color:#94a3b8;">${meta.label}</span>
+                                    </div>
+                                    <strong style="color:#0f172a; font-size:0.97em; white-space:nowrap; margin-left:12px;">${intent.count.toLocaleString()} events</strong>
+                                </div>
+                                <div style="background:#f1f5f9; border-radius:999px; height:8px; overflow:hidden; display:flex;">
+                                    ${barHtml}
+                                </div>
+                            </div>`;
+                    });
+                }
+
+                const commandsContainer = document.getElementById('commandsContainer');
+                commandsContainer.innerHTML = '';
+                if(data.commands.length === 0){
+                    commandsContainer.innerHTML = '<div class="list-item-modern" style="background: #f8fafc; border: 1px solid #f1f5f9;"><span style="color:#888;">No malicious payloads captured.</span></div>';
+                } else {
+                    data.commands.forEach(cmd => {
+                        commandsContainer.innerHTML += `
+                            <div class="list-item-modern" style="background: #f8fafc; border: 1px solid #f1f5f9; align-items: center;">
+                                <span class="clamp-2-lines" style="font-family: 'Courier New', Courier, monospace; color: #ef4444; font-size: 0.95em;" title="${cmd.input}">${cmd.input}</span>
+                                <strong style="color: #0f172a; font-size: 0.95em; white-space: nowrap; flex-shrink: 0;">${cmd.count.toLocaleString()} times</strong>
+                            </div>`;
+                    });
+                }
+
+                if (trendChartObj) {
+                    trendChartObj.data.labels = data.trend.labels;
+                    trendChartObj.data.datasets[0].data = data.trend.data;
+                    trendChartObj.update();
+                }
+
+                if (peakHoursChartObj) {
+                    peakHoursChartObj.data.labels = data.peak_hours.labels;
+                    peakHoursChartObj.data.datasets[0].data = data.peak_hours.data;
+                    peakHoursChartObj.update();
+                }
+
+                if (typeof google !== 'undefined' && google.visualization && document.getElementById('geoOriginsMap')) {
+                    const geoData = google.visualization.arrayToDataTable(data.geo);
+                    const options = {
+                        backgroundColor: 'transparent',
+                        datalessRegionColor: '#f1f5f9',
+                        defaultColor: '#38bdf8',
+                        // Fixed colour thresholds, so the map legend does not rescale as the data changes
+                        // 0-100 events = light blue, 100-500 = orange, 500+ = red
+                        colorAxis: {
+                            values: [0, 100, 500], 
+                            colors: ['#7dd3fc', '#f59e0b', '#ef4444']
+                        }, 
+                        legend: 'none',
+                        tooltip: { isHtml: true }
+                    };
+                    const chart = new google.visualization.GeoChart(document.getElementById('geoOriginsMap'));
+                    chart.draw(geoData, options);
+                }
+
+                const aiInsights = document.getElementById('aiInsights');
+
+                // ---- Helpers for the threat write-up below ----------------------
+                // Payloads and credential pairs are attacker-supplied, so they are
+                // escaped before going anywhere near innerHTML.
+                const esc = (s) => String(s).replace(/[&<>"]/g,
+                    c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+                const num = (n) => Number(n || 0).toLocaleString();
+                const pct = (n) => data.summary.total > 0
+                    ? ((n / data.summary.total) * 100).toFixed(1) + '%'
+                    : '0%';
+
+                // The API only returns intent categories it actually observed, so
+                // anything missing falls back to a zero stub rather than undefined.
+                const intentOf = (name) => data.intents.find(i => i.name === name)
+                    || { name: name, count: 0, breakdown: { lock: 0, plug: 0 } };
+
+                // Every intent carries a lock/plug split (SSH ports 22 and 2222 vs
+                // Telnet ports 23 and 2223). Using it lets the paragraphs name the
+                // device that was really hit, instead of always describing an SSH
+                // door lock even when the traffic was all Telnet against the plug.
+                const deviceFocus = (it) => {
+                    const lock = it.breakdown.lock || 0;
+                    const plug = it.breakdown.plug || 0;
+                    if (lock > 0 && plug > 0) return {
+                        name: 'both the Smart Door Lock and the Smart Plug',
+                        detail: num(lock) + ' via SSH, ' + num(plug) + ' via Telnet',
+                        hardening: 'enforce SSH key-only authentication on the door lock, and move the smart plug off plaintext Telnet'
+                    };
+                    if (plug > lock) return {
+                        name: 'the Smart Plug',
+                        detail: 'over plaintext Telnet',
+                        hardening: 'replace the plaintext Telnet interface on the smart plug with encrypted SSH'
+                    };
+                    return {
+                        name: 'the Smart Door Lock',
+                        detail: 'over SSH',
+                        hardening: 'enforce SSH key-only authentication on the door lock'
+                    };
+                };
+
+                // Quotes one captured command or credential pair as evidence.
+                // Returns '' when nothing was captured, so the sentence just ends.
+                const evidence = (label, value, count) =>
+                    (value === undefined || value === null || value === '') ? '' :
+                    ` ${label}: <code style="font-family: 'Courier New', Courier, monospace; color: #ef4444;">${esc(value)}</code> (${num(count)}&times;).`;
+
+                const payloadIntent = intentOf('Remote Payload Injection');
+                const overrideIntent = intentOf('Unauthorized Override');
+                const stuffingIntent = intentOf('Credential Stuffing');
+                const topCmd = data.commands[0];
+                const topCred = data.top_credentials[0];
+
+                const para = 'margin-bottom: 15px; color: #334155; line-height: 1.6; font-size: 1.02em;';
+                const paraLast = 'color: #334155; line-height: 1.6; font-size: 1.02em;';
+
+                // Nothing captured yet: say so plainly instead of reporting a
+                // risk verdict over an empty data set.
+                if (data.summary.total === 0) {
+                    aiInsights.innerHTML = `
+                        <div style="padding: 5px 0;">
+                            <p style="${paraLast}">No honeypot activity has been captured in the last 7 days. Threat intelligence will populate automatically once the Cowrie stream records new events.</p>
+                        </div>
+                    `;
+
+                // Critical: commands actually ran on a device.
+                } else if (data.summary.disruptions > 0) {
+                    const focus = deviceFocus(payloadIntent);
+                    const priorBreach = overrideIntent.count > 0
+                        ? ` Authentication was overridden ${num(overrideIntent.count)} times across the same window.`
+                        : '';
+                    aiInsights.innerHTML = `
+                        <div style="padding: 5px 0;">
+                            <p style="${para}"><strong>Observed Threat:</strong> Active post-exploitation activity with <strong>Remote Payload Injection</strong>. ${num(payloadIntent.count)} of ${num(data.summary.total)} captured events (${pct(payloadIntent.count)}) reached command execution against ${focus.name} (${focus.detail}).${evidence('Most repeated payload', topCmd && topCmd.input, topCmd && topCmd.count)}</p>
+                            <p style="${para}"><strong>Categorization:</strong> <span style="color:#ef4444; font-weight:bold;">CRITICAL RISK</span>. Attackers have successfully bypassed authentication and are actively executing shell commands to manipulate ${focus.name}.${priorBreach}</p>
+                            <p style="${paraLast}"><strong>Actionable Insight for IoT Vendors:</strong> Immediately sandbox the ${num(payloadIntent.count)} extracted payloads. Firmware must hardcode the prevention of arbitrary command execution. In parallel, ${focus.hardening}.</p>
+                        </div>
+                    `;
+
+                // High: authentication was bypassed, but no payload ran yet.
+                } else if (data.intents.some(i => i.name === 'Unauthorized Override')) {
+                    const focus = deviceFocus(overrideIntent);
+                    const guessing = stuffingIntent.count > 0
+                        ? ` A further ${num(stuffingIntent.count)} authentication attempts were rejected over the same window.`
+                        : '';
+                    aiInsights.innerHTML = `
+                        <div style="padding: 5px 0;">
+                            <p style="${para}"><strong>Observed Threat:</strong> Successful perimeter breach resulting in an <strong>Unauthorized Override</strong>. ${num(overrideIntent.count)} of ${num(data.summary.total)} captured events (${pct(overrideIntent.count)}) ended in a successful login against ${focus.name} (${focus.detail}).</p>
+                            <p style="${para}"><strong>Categorization:</strong> <span style="color:#f59e0b; font-weight:bold;">HIGH RISK</span>. The attacker successfully authenticated using exposed credentials but has not yet executed malicious payloads.${guessing}${evidence('Most attempted credential pair', topCred && topCred.pair, topCred && topCred.count)}</p>
+                            <p style="${paraLast}"><strong>Actionable Insight for IoT Vendors:</strong> Force users to change default passwords upon initial device setup. Beyond that, ${focus.hardening}.</p>
+                        </div>
+                    `;
+
+                // Low: background scanning and password guessing only.
+                } else {
+                    aiInsights.innerHTML = `
+                        <div style="padding: 5px 0;">
+                            <p style="${para}"><strong>Observed Threat:</strong> Widespread automated scanning and <strong>Credential Stuffing</strong>. ${num(stuffingIntent.count)} of ${num(data.summary.total)} captured events (${pct(stuffingIntent.count)}) were failed authentication attempts.</p>
+                            <p style="${para}"><strong>Categorization:</strong> <span style="color:#3b82f6; font-weight:bold;">LOW RISK</span>. Botnets are attempting to map open ports (22, 2222, 23) and guess standard IoT credentials without achieving access.${evidence('Most attempted credential pair', topCred && topCred.pair, topCred && topCred.count)}</p>
+                            <p style="${paraLast}"><strong>Actionable Insight for IoT Vendors:</strong> Implement rate limiting, exponential backoff, and IP banning mechanisms (e.g., fail2ban) in the device firmware to neutralize automated probing.</p>
+                        </div>
+                    `;
+                }
+
+            } catch (error) {
+                console.error("Analytics pipeline offline:", error);
+            }
+        }
+
+        google.charts.load('current', {'packages':['geochart']});
+        google.charts.setOnLoadCallback(() => {
+            initCharts();
+            loadAnalyticsData();
+            
+            setInterval(() => {
+                if (!document.hidden) loadAnalyticsData();
+            }, 15000);
+
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) loadAnalyticsData();
+            });
+        });
+
+    </script>
+</body>
+</html>

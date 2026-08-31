@@ -1,0 +1,60 @@
+/* =========================================================
+   attack-logs.css
+   Page-only styles for attack-logs.html.
+   Loaded after style.css. The sticky header, the scrollable
+   wrapper and the "Loading…" cell all use shared helpers from
+   style.css; what is left here is specific to this one table.
+   ========================================================= */
+
+/* ---------------------------------------------------------
+   PANEL HEADER
+   --------------------------------------------------------- */
+
+/* "Showing N of M records" line under the panel heading. */
+.result-count {
+    color: #666;
+    font-size: 0.9em;
+    margin-top: 5px;
+}
+
+/* ---------------------------------------------------------
+   THREAT RECORD TABLE
+   --------------------------------------------------------- */
+
+/* Height cap for the log table so the summary panels underneath stay on
+   screen. Pair with .is-scrollable from style.css for the scrollbars,
+   border and rounded corners. */
+.logs-scroll {
+    max-height: 600px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* This table carries seven columns, so it is given a wider floor than the
+   site default of 800px and switched to a fixed layout: the percentage
+   widths below then hold, instead of the browser resizing columns to fit
+   whatever payload text happens to be in view. */
+.attack-logs-table {
+    width: 100%;
+    min-width: 1050px;
+    table-layout: fixed;
+    border-collapse: collapse;
+    text-align: left;
+}
+
+/* Header cells: roomier than the shared cell padding, and kept on one line
+   so a heading never wraps and knocks the column widths out of alignment. */
+.attack-logs-table thead th {
+    padding: 12px 15px;
+    text-align: left;
+    white-space: nowrap;
+}
+
+/* Fixed column widths, adding up to 100%. */
+.attack-logs-table .col-timestamp { width: 18%; }
+.attack-logs-table .col-source-ip { width: 13%; }
+.attack-logs-table .col-device    { width: 12%; }
+.attack-logs-table .col-protocol  { width: 8%; }
+.attack-logs-table .col-username  { width: 8%; }
+.attack-logs-table .col-risk      { width: 12%; }
+.attack-logs-table .col-payload   { width: 29%; }

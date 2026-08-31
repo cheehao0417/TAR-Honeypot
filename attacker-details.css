@@ -1,0 +1,150 @@
+/* =========================================================
+   attacker-details.css
+   Page-only styles for attacker-details.html.
+   Loaded after style.css, which already provides the profile
+   card, the command list and the timeline; the rules here cover
+   the IP picker in the header and this page's own tables.
+   ========================================================= */
+
+/* ---------------------------------------------------------
+   IP SELECTOR (top-right of the header)
+   A small white card holding a dropdown of known attacker IPs
+   and a free-text search box.
+   --------------------------------------------------------- */
+.session-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: #fff;
+    padding: 12px 15px;
+    border-radius: 12px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
+    min-width: 280px;
+}
+
+/* One labelled control line inside that card. */
+.session-picker-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+/* The fixed-width label keeps "Select:" and "Search:" aligned so both
+   inputs start at the same x position. */
+.session-picker-label {
+    font-weight: bold;
+    color: #1e293b;
+    font-size: 14px;
+    min-width: 55px;
+}
+
+/* Dropdown listing every attacker IP captured so far. */
+.session-select {
+    flex: 1;
+    padding: 8px;
+    border-radius: 8px;
+    border: 1px solid #cbd5e1;
+    outline: none;
+    cursor: pointer;
+    color: #0f172a;
+}
+
+/* Free-text box for jumping straight to an IP address. */
+.session-search-input {
+    flex: 1;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid #cbd5e1;
+    outline: none;
+    color: #0f172a;
+    font-size: 13px;
+}
+
+/* Submit button beside the search box. */
+.session-search-btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 8px;
+    background: #2563eb;
+    color: #fff;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 13px;
+}
+
+/* ---------------------------------------------------------
+   ATTACKER PROFILE CARD
+   --------------------------------------------------------- */
+
+/* Solid red avatar replacing the default blue gradient, marking the
+   profile as a confirmed threat. */
+.profile-avatar.is-critical {
+    background: #ff4d4d;
+}
+
+/* Emphasised value inside a profile line, e.g. the targeted device and the
+   maximum risk level reached. */
+.value-strong {
+    font-weight: bold;
+}
+
+/* ---------------------------------------------------------
+   CREDENTIAL STUFFING TABLE
+   --------------------------------------------------------- */
+
+/* Height cap for the login-attempt table. Pair with .is-scrollable from
+   style.css for the scrollbar, border and rounded corners. */
+.credentials-scroll {
+    max-height: 250px;
+}
+
+/* Slightly tighter header padding than the shared table default, since
+   this table sits inside a half-width panel. */
+.credentials-table thead th {
+    padding: 12px;
+    text-align: left;
+}
+
+/* ---------------------------------------------------------
+   EXTRACTED PAYLOADS
+   --------------------------------------------------------- */
+
+/* Scroll box around the payload list. Without this a single IP that ran
+   dozens of commands would stretch the panel far past its neighbours. */
+.payload-scroll {
+    max-height: 250px;
+    overflow-y: auto;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #ffffff;
+    padding: 10px;
+}
+
+/* "No commands executed" row: strips the card styling the real payload
+   rows use so the empty state reads as plain text. */
+.command-list li.is-empty {
+    text-align: center;
+    color: #64748b;
+    background: transparent;
+    box-shadow: none;
+    border: none;
+}
+
+/* ---------------------------------------------------------
+   SESSION TIMELINE
+   --------------------------------------------------------- */
+
+/* Scroll box around the timeline. The right padding keeps the entries
+   clear of the scrollbar. */
+.timeline-scroll {
+    max-height: 270px;
+    overflow-y: auto;
+    padding-right: 15px;
+    border-radius: 8px;
+}
+
+/* Small breathing space so the first timeline dot is not clipped by the
+   top edge of the scroll box. */
+.timeline.is-forensic {
+    padding-top: 5px;
+}

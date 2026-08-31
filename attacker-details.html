@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TAR Honeypot - Attacker Details</title>
+    <!-- Shared site-wide styles first, then this page's own overrides -->
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="attacker-details.css">
+</head>
+
+<body class="dashboard-body">
+
+    <div class="dashboard-container">
+
+        <aside class="sidebar">
+            <div class="sidebar-logo">
+                <button id="sidebarToggle" class="sidebar-toggle-btn">☰</button>
+                <div class="sidebar-logo-text">
+                    <h2>TAR Honeypot</h2>
+                    <p>IoT Monitoring System</p>
+                </div>
+            </div>
+
+            <nav class="sidebar-menu">
+                <a href="dashboard.html">Dashboard</a>
+                <a href="attack-logs.html">Attack Logs</a>
+                <a href="alerts.html">Alerts</a>
+                <a href="attacker-details.html" class="active">Attacker Details</a>
+                <a href="analytics.html">Analytics</a>
+                <a href="manage-users.html">Manage Users</a>
+                <a href="setting.html">Settings</a>
+                <a href="login.html">Logout</a>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <header class="topbar">
+                <div>
+                    <h1>Attacker Profiling & Payloads</h1>
+                    <p>Comprehensive historical analysis of critical and high risk attacker's footprint</p>
+                </div>
+
+                <!-- IP picker. Either path - choosing from the dropdown or typing an
+                     address into the search box - loads the same attacker profile. -->
+                <div class="session-picker">
+
+                    <div class="session-picker-row">
+                        <label for="sessionDropdown" class="session-picker-label">Select:</label>
+                        <select id="sessionDropdown" class="session-select">
+                            <option value="">Loading attacker profiles...</option>
+                        </select>
+                    </div>
+
+                    <div class="session-picker-row">
+                        <label for="sessionSearch" class="session-picker-label">Search:</label>
+                        <input type="text" id="sessionSearch" placeholder="Enter IP Address..."
+                            class="session-search-input">
+                        <button id="searchBtn" class="session-search-btn">Search</button>
+                    </div>
+
+                </div>
+            </header>
+
+            <section class="attacker-profile-grid">
+                <div class="dashboard-panel attacker-profile-card">
+                    <div class="profile-header">
+                        <div class="profile-avatar is-critical">IP</div>
+                        <div>
+                            <h2 id="profileIP">Loading...</h2>
+                            <p>Targeting <span id="profileDeviceDesc" class="value-strong">...</span></p>
+                        </div>
+                    </div>
+
+                    <div class="profile-info">
+                        <p><strong>First Seen:</strong> <span id="profileFirstSeen">-</span></p>
+                        <p id="profileChannel"><strong>Total Intrusions:</strong> -</p>
+                        <p><strong>Max Risk Level:</strong> <span id="profileRiskLevel"
+                                class="value-strong">-</span></p>
+                    </div>
+                </div>
+
+                <div class="dashboard-panel">
+                    <h2>Attack Summary</h2>
+                    <div class="protocol-box">
+                        <div class="protocol-item">
+                            <span>Unauthorized Access</span>
+                            <strong id="summaryAccessCount">0</strong>
+                        </div>
+                        <div class="protocol-item">
+                            <span>Unique Malicious Commands</span>
+                            <strong id="summaryCmdCount">0</strong>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="attacker-details-grid">
+                <div class="dashboard-panel">
+                    <h2>Credential Stuffing Log</h2>
+
+                    <!-- Every username / password pair this IP tried, in order -->
+                    <div class="table-wrapper is-scrollable credentials-scroll">
+                        <table class="logs-table credentials-table">
+                            <thead class="sticky-thead sticky-thead-shadow">
+                                <tr>
+                                    <th>Username</th>
+                                    <th>Password</th>
+                                    <th>Result</th>
+                                </tr>
+                            </thead>
+                            <tbody id="credentialsTableBody">
+                                <tr>
+                                    <td colspan="3" class="table-msg-cell is-compact">Select an IP to view
+                                        logs...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                </div>
+
+                <div class="dashboard-panel">
+                    <h2>Extracted Unique Payloads</h2>
+                    <!-- Own scroll box, so an IP that ran dozens of commands cannot
+                         stretch this panel past the ones beside it -->
+                    <div class="payload-scroll">
+                        <ul class="command-list" id="commandsList">
+                            <li class="is-empty">No commands executed by this IP.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="dashboard-panel wide-panel">
+                    <h2>Sessions Timeline</h2>
+
+                    <!-- Chronological view of this IP's sessions -->
+                    <div class="timeline-scroll">
+                        <div class="timeline is-forensic" id="forensicTimeline">
+                            <div class="text-slate">Loading timeline...</div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="dashboard-panel">
+                    <h2>Recommendation</h2>
+                    <ul class="alert-list" id="recommendedActionList">
+                    </ul>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        // Global API guard: attaches the auth token to every request and forces a re-login when the session is no longer valid
+        const originalFetch = window.fetch;
+        window.fetch = async function () {
+            let [resource, config] = arguments;
+
+            // Attach the Bearer token to every API call except the login request itself
+            if (typeof resource === 'string' && resource.includes('/api/') && !resource.includes('/api/login')) {
+                config = config || {};
+                config.headers = config.headers || {};
+                const token = localStorage.getItem('tar_token');
+                if (token) {
+                    config.headers['Authorization'] = `Bearer ${token}`;
+                }
+            }
+
+            const response = await originalFetch(resource, config);
+
+            // Token rejected (forged, or invalidated by a server restart) - send the user back to the login page
+            if (response.status === 401) {
+                alert("Session Expired or Unauthorized! Returning to login.");
+                localStorage.removeItem('tar_current_user');
+                localStorage.removeItem('tar_token');
+                window.location.href = 'login.html';
+            }
+            return response;
+        };
+
+        const currentUser = JSON.parse(localStorage.getItem('tar_current_user'));
+
+        if (!currentUser) {
+            window.location.href = 'login.html';
+        } else {
+            // Shared page logic: hide the admin-only sidebar links. No URL checks needed here
+            if (currentUser.role !== 'Administrator' && currentUser.role !== 'IT Manager') {
+                const manageUsersLink = document.querySelector('a[href="manage-users.html"]');
+                if (manageUsersLink) {
+                    manageUsersLink.style.display = 'none';
+                }
+            }
+        }
+
+        const sidebarToggle = document.getElementById('sidebarToggle');
+        const dashboardContainer = document.querySelector('.dashboard-container');
+
+        if (sidebarToggle) {
+            sidebarToggle.addEventListener('click', function () {
+                dashboardContainer.classList.toggle('sidebar-hidden');
+            });
+        }
+
+        const API_BASE = 'http://127.0.0.1:5000/api';
+        let globalAttackers = [];
+
+        // Fill the IP dropdown with the attackers worth investigating (those
+        // that reached Critical or High risk).
+        async function fetchSessions() {
+            try {
+                const response = await fetch(`${API_BASE}/sessions`);
+                globalAttackers = await response.json();
+
+                const dropdown = document.getElementById('sessionDropdown');
+
+                const currentSelection = dropdown.value;
+
+                dropdown.innerHTML = '';
+
+                if (globalAttackers.length === 0) {
+                    dropdown.innerHTML = '<option value="">No threats found</option>';
+                    return;
+                }
+
+                globalAttackers.forEach(s => {
+                    const option = document.createElement('option');
+                    option.value = s.ip;
+                    option.textContent = `${s.ip} (${s.risk})`;
+                    dropdown.appendChild(option);
+                });
+
+                if (currentSelection && globalAttackers.some(s => s.ip === currentSelection)) {
+                    dropdown.value = currentSelection;
+                    loadAttackerDetails(currentSelection);
+                } else {
+                    loadAttackerDetails(globalAttackers[0].ip);
+                }
+
+            } catch (error) {
+                console.error("Failed to fetch sessions:", error);
+            }
+        }
+
+        // Load one attacker's full profile and render the summary, the
+        // credential attempts, the extracted payloads, the session timeline
+        // and the recommended actions.
+        async function loadAttackerDetails(ip) {
+            try {
+                const response = await fetch(`${API_BASE}/attacker/details?ip=${ip}`);
+                const data = await response.json();
+
+                if (!data.profile) return;
+
+                const attackerObj = globalAttackers.find(s => s.ip === ip);
+                const riskLevel = attackerObj ? attackerObj.risk : 'Unknown Risk';
+
+                document.getElementById('profileIP').textContent = data.profile.ip;
+                document.getElementById('profileDeviceDesc').textContent = data.profile.device;
+
+                const riskSpan = document.getElementById('profileRiskLevel');
+                riskSpan.textContent = riskLevel;
+                if (riskLevel === 'Critical Risk') {
+                    riskSpan.style.color = '#ff4d4d';
+                } else if (riskLevel === 'High Risk') {
+                    riskSpan.style.color = '#ffaa00';
+                } else {
+                    riskSpan.style.color = '#64748b';
+                }
+
+                const firstSeenDate = new Date(data.profile.first_seen).toLocaleString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+                document.getElementById('profileFirstSeen').textContent = firstSeenDate;
+                document.getElementById('profileChannel').innerHTML = `<strong>Total Intrusions:</strong> ${data.profile.total_sessions} Sessions`;
+
+                const accessCount = data.credentials.filter(c => c.result === 'Success').length;
+                document.getElementById('summaryAccessCount').textContent = accessCount;
+                document.getElementById('summaryCmdCount').textContent = data.commands.length;
+
+                const credBody = document.getElementById('credentialsTableBody');
+                credBody.innerHTML = '';
+                if (data.credentials.length === 0) {
+                    credBody.innerHTML = '<tr><td colspan="3" style="text-align: center; padding: 15px;">No login attempts logged</td></tr>';
+                } else {
+                    data.credentials.forEach(cred => {
+                        const isSuccess = cred.result === 'Success';
+                        credBody.innerHTML += `
+                            <tr style="border-bottom: 1px solid #f1f5f9;">
+                                <td style="padding: 10px;">${cred.username}</td>
+                                <td style="padding: 10px;">${cred.password}</td>
+                                <td style="padding: 10px;"><span style="color: ${isSuccess ? '#ffaa00' : '#64748b'}; font-weight: ${isSuccess ? 'bold' : 'normal'};">${cred.result}</span></td>
+                            </tr>
+                        `;
+                    });
+                }
+
+                const cmdList = document.getElementById('commandsList');
+                cmdList.innerHTML = '';
+                if (data.commands.length === 0) {
+                    cmdList.innerHTML = '<li style="padding: 15px; text-align: center; color: #64748b;">No commands executed.</li>';
+                } else {
+                    data.commands.forEach(cmdObj => {
+                        const raw = typeof cmdObj === 'string' ? cmdObj : cmdObj.raw;
+                        const decoded = typeof cmdObj === 'string' ? '' : (cmdObj.decoded || '');
+                        const decodedLine = decoded
+                            ? `<div style="margin-top: 3px; color: #94a3b8; font-size: 0.85em;">&#x1F50D; Decoded: <code style="color: #94a3b8;">${decoded}</code></div>`
+                            : '';
+                        cmdList.innerHTML += `<li><code>${raw}</code>${decodedLine}</li>`;
+                    });
+                }
+
+                const timelineContainer = document.getElementById('forensicTimeline');
+                timelineContainer.innerHTML = '';
+
+                // Render at most the 100 most recent timeline entries, so a single very active IP cannot freeze the page
+                const displayTimeline = data.timeline.reverse().slice(0, 100);
+
+                displayTimeline.forEach(step => {
+                    let dotColor = '#94a3b8'; // default: grey (No Risk / Connection Established)
+                    if (step.event === 'cowrie.command.input') dotColor = '#ff4d4d';    // Critical
+                    else if (step.event === 'cowrie.login.success') dotColor = '#ffaa00'; // High
+                    else if (step.event === 'cowrie.login.failed') dotColor = '#0369a1';  // Low
+
+                    const stepTime = new Date(step.time).toLocaleTimeString(undefined);
+                    const stepDate = new Date(step.time).toLocaleDateString(undefined);
+
+                    timelineContainer.innerHTML += `
+                        <div class="timeline-item">
+                            <div class="timeline-dot" style="background: ${dotColor};"></div>
+                            <div class="timeline-content">
+                                <h3>${stepDate} ${stepTime} - ${step.title}</h3>
+                                <p>${step.desc}</p>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                if (data.timeline.length > 100) {
+                    timelineContainer.innerHTML += `
+                        <div style="text-align: center; padding: 10px; color: #94a3b8; font-size: 0.9em;">
+                            Showing the most recent 100 timeline events.
+                        </div>
+                    `;
+                }
+
+                const actionList = document.getElementById('recommendedActionList');
+                if (actionList) {
+                    actionList.innerHTML = '';
+                    if (riskLevel === 'Critical Risk') {
+                        actionList.innerHTML += `
+                            <li style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #eee;">
+                                <strong style="color: #ff4d4d; display: block; margin-bottom: 4px;">Extract & Sandbox Payloads</strong>
+                                <span style="font-size: 0.9em; color: #555;">This attacker has successfully executed a <b>Remote Payload Injection</b>. Extract the unique malicious commands listed above and analyze them in a secure sandbox. Do not execute them locally.</span>
+                            </li>
+                            <li>
+                                <strong style="color: #ff4d4d; display: block; margin-bottom: 4px;">Isolate IoT Device</strong>
+                                <span style="font-size: 0.9em; color: #555;">The device configuration (Smart Lock/Plug) was manipulated by ${ip}. Isolate it from the primary network immediately for forensic review.</span>
+                            </li>
+                        `;
+                    } else if (riskLevel === 'High Risk') {
+                        actionList.innerHTML += `
+                            <li style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #eee;">
+                                <strong style="color: #ffaa00; display: block; margin-bottom: 4px;">Enforce Secure Authentication</strong>
+                                <span style="font-size: 0.9em; color: #555;">This attacker achieved an <b>Unauthorized Override</b> by bypassing authentication. Enforce key-based authentication (SSH Keys) and completely disable password-based/Telnet logins immediately.</span>
+                            </li>
+                            <li>
+                                <strong style="color: #ffaa00; display: block; margin-bottom: 4px;">Block Attacker IP at Perimeter</strong>
+                                <span style="font-size: 0.9em; color: #555;">Add ${ip} to your primary firewall and IoT gateway blocklist to prevent persistent access attempts and lateral movement.</span>
+                            </li>
+                        `;
+                    }
+                }
+
+            } catch (error) {
+                console.error("Failed to fetch attacker details:", error);
+            }
+        }
+
+        document.getElementById('sessionDropdown').addEventListener('change', function (e) {
+            if (e.target.value) {
+                loadAttackerDetails(e.target.value);
+            }
+        });
+
+        document.getElementById('searchBtn').addEventListener('click', function () {
+            const query = document.getElementById('sessionSearch').value.trim().toLowerCase();
+            if (!query) return;
+
+            // 1. Exact match wins, so the forensic view never shows the wrong IP
+            let matchedAttacker = globalAttackers.find(s => s.ip.toLowerCase() === query);
+
+            // 2. Fall back to a partial match, which keeps subnet searches convenient
+            if (!matchedAttacker) {
+                matchedAttacker = globalAttackers.find(s => s.ip.toLowerCase().includes(query));
+            }
+
+            if (matchedAttacker) {
+                document.getElementById('sessionDropdown').value = matchedAttacker.ip;
+                loadAttackerDetails(matchedAttacker.ip);
+                document.getElementById('sessionSearch').value = '';
+            } else {
+                alert('No critical or high risk threats found for this IP.');
+            }
+        });
+
+        document.getElementById('sessionSearch').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                document.getElementById('searchBtn').click();
+            }
+        });
+
+        // Page start-up: fill the IP picker, wire the search box and begin
+        // polling for new activity.
+        document.addEventListener('DOMContentLoaded', async () => {
+            await fetchSessions();
+
+            const urlParams = new URLSearchParams(window.location.search);
+            const targetIp = urlParams.get('ip');
+
+            if (targetIp) {
+                const searchInput = document.getElementById('sessionSearch');
+                if (searchInput) {
+                    searchInput.value = targetIp;
+                    document.getElementById('searchBtn').click();
+                }
+            }
+
+            // Polling: only refresh while this tab is visible
+            setInterval(() => {
+                if (!document.hidden) fetchSessions();
+            }, 15000);
+
+            // Refresh immediately when the user switches back to this tab
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) fetchSessions();
+            });
+        });
+    </script>
+</body>
+
+</html>

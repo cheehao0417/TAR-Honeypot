@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TAR Honeypot - Settings</title>
+    <!-- Shared site-wide styles first, then this page's own overrides -->
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="setting.css">
+</head>
+<body class="dashboard-body">
+
+    <div class="dashboard-container">
+
+        <aside class="sidebar">
+            <div class="sidebar-logo">
+                <button id="sidebarToggle" class="sidebar-toggle-btn">☰</button>
+                <div class="sidebar-logo-text">
+                    <h2>TAR Honeypot</h2>
+                    <p>IoT Monitoring System</p>
+                </div>
+            </div>
+
+            <nav class="sidebar-menu">
+                <a href="dashboard.html">Dashboard</a>
+                <a href="attack-logs.html">Attack Logs</a>
+                <a href="alerts.html">Alerts</a>
+                <a href="attacker-details.html">Attacker Details</a>
+                <a href="analytics.html">Analytics</a>
+                <a href="manage-users.html">Manage Users</a>
+                <a href="setting.html" class="active">Settings</a>
+                <a href="login.html">Logout</a>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <header class="topbar">
+                <div>
+                    <h1>Settings</h1>
+                    <p>Manage your account preferences and security credentials</p>
+                </div>
+            </header>
+
+            <!-- Two-column settings layout: forms on the left, preferences and
+                 the account summary on the right. See setting.css. -->
+            <section class="settings-layout">
+                
+                <!-- Left column: profile details and the change-password form -->
+                <div class="settings-left dashboard-panel">
+                    <h2>User Account</h2>
+                    <div id="profileAlert" class="alert-box"></div>
+                    
+                    <form id="profileForm" class="settings-form">
+                        <div class="settings-group">
+                            <label for="username">Full Name</label>
+                            <input type="text" id="username" required>
+                        </div>
+
+                        <div class="settings-group">
+                            <label for="email">Email Address</label>
+                            <input type="text" id="email" required>
+                            <div id="emailInlineError" class="inline-error">
+                                Please enter a valid email ending with @gmail.com, @tarumt.edu.my, or @student.tarc.edu.my.
+                            </div>
+                        </div>
+
+                        <button type="submit" class="save-btn" id="btnUpdateProfile">Update Profile</button>
+                    </form>
+
+                    <hr class="form-divider">
+
+                    <h2>Change Password</h2>
+                    <div id="pwdAlert" class="alert-box"></div>
+                    
+                    <form id="passwordForm" class="settings-form">
+                        <div class="settings-group">
+                            <label for="oldPassword">Old Password</label>
+                            <input type="password" id="oldPassword" placeholder="Enter current password" required>
+                        </div>
+
+                        <div class="settings-group">
+                            <label for="newPassword">New Password</label>
+                            <input type="password" id="newPassword" placeholder="Enter new secure password" required>
+                            <div id="pwdInlineError" class="inline-error inline-error-multiline">
+                                Password must be at least 8 characters long, include an uppercase letter, a number, and a symbol.
+                            </div>
+                        </div>
+
+                        <div class="settings-group">
+                            <label for="confirmPassword">Confirm New Password</label>
+                            <input type="password" id="confirmPassword" placeholder="Type new password again" required>
+                        </div>
+
+                        <button type="submit" class="save-btn" id="btnUpdatePwd">Update Password</button>
+                    </form>
+                </div>
+
+                <!-- Right column: notification preference and the account summary -->
+                <div class="settings-right">
+                    
+                    <div class="dashboard-panel">
+                        <h2>Notification Setting</h2>
+                        <div id="notifyAlert" class="alert-box"></div>
+                        <form id="notifyForm" class="settings-form">
+                            <div class="settings-group">
+                                <label for="notification">Email Notification</label>
+                                <select id="notification">
+                                    <option value="Enabled">Enabled</option>
+                                    <option value="Disabled">Disabled</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="save-btn" id="btnUpdateNotify">Update Setting</button>
+                        </form>
+                    </div>
+
+                    <div class="dashboard-panel">
+                        <h2>Current Summary</h2>
+                        <div class="system-summary">
+                            <p><strong>Name:</strong> <span id="summaryName">Loading...</span></p>
+                            <p><strong>Email Notification:</strong> <span id="summaryNotify">Loading...</span></p>
+                            <p><strong>Access Type:</strong> <span id="summaryRole">Loading...</span></p>
+                        </div>
+                    </div>
+
+                </div>
+
+            </section>
+        </main>
+    </div>
+
+    <script>
+        // Global API guard: attaches the auth token to every request and forces a re-login when the session is no longer valid
+        const originalFetch = window.fetch;
+        window.fetch = async function() {
+            let [resource, config] = arguments;
+            
+            // Attach the Bearer token to every API call except the login request itself
+            if (typeof resource === 'string' && resource.includes('/api/') && !resource.includes('/api/login')) {
+                config = config || {};
+                config.headers = config.headers || {};
+                const token = localStorage.getItem('tar_token');
+                if (token) {
+                    config.headers['Authorization'] = `Bearer ${token}`;
+                }
+            }
+            
+            const response = await originalFetch(resource, config);
+            
+            // Token rejected (forged, or invalidated by a server restart) - send the user back to the login page
+            if (response.status === 401) {
+                alert("Session Expired or Unauthorized! Returning to login.");
+                localStorage.removeItem('tar_current_user');
+                localStorage.removeItem('tar_token');
+                window.location.href = 'login.html';
+            }
+            return response;
+        };
+
+        // ==========================================
+        // Permission guard
+        // ==========================================
+        const currentUser = JSON.parse(localStorage.getItem('tar_current_user'));
+        
+        if (!currentUser) {
+            window.location.href = 'login.html';
+        } else {
+            if (currentUser.role !== 'Administrator' && currentUser.role !== 'IT Manager') {
+                const manageUsersLink = document.querySelector('a[href="manage-users.html"]');
+                if (manageUsersLink) {
+                    manageUsersLink.style.display = 'none';
+                }
+            }
+        }
+
+        const sidebarToggle = document.getElementById('sidebarToggle');
+        const dashboardContainer = document.querySelector('.dashboard-container');
+        if(sidebarToggle) {
+            sidebarToggle.addEventListener('click', function() {
+                dashboardContainer.classList.toggle('sidebar-hidden');
+            });
+        }
+
+        // ==========================================
+        // Fill both forms and the summary panel from the current user record
+        // ==========================================
+        // Fill both forms and the Current Summary panel from the stored user
+        // record.
+        function populateUserData() {
+            const user = JSON.parse(localStorage.getItem('tar_current_user'));
+            if(user) {
+                document.getElementById('username').value = user.name;
+                document.getElementById('email').value = user.email;
+                document.getElementById('notification').value = user.notification || 'Enabled';
+                
+                document.getElementById('summaryName').textContent = user.name;
+                document.getElementById('summaryRole').textContent = user.role;
+                document.getElementById('summaryNotify').textContent = user.notification || 'Enabled';
+            }
+        }
+        
+        document.addEventListener('DOMContentLoaded', populateUserData);
+
+        // ==========================================
+        // Form 1: update the profile (name and email)
+        // ==========================================
+        const emailInput = document.getElementById('email');
+        const emailInlineError = document.getElementById('emailInlineError');
+        const profileAlert = document.getElementById('profileAlert');
+
+        emailInput.addEventListener('input', function() {
+            const emailRegex = /^[a-zA-Z0-9._%+-]+@(gmail\.com|tarumt\.edu\.my|student\.tarc\.edu\.my)$/i;
+            if (emailRegex.test(this.value)) {
+                emailInlineError.style.display = 'none';
+            }
+        });
+
+        document.getElementById('profileForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            profileAlert.style.display = 'none';
+
+            const newName = document.getElementById('username').value.trim();
+            const newEmail = emailInput.value.trim();
+
+            const emailRegex = /^[a-zA-Z0-9._%+-]+@(gmail\.com|tarumt\.edu\.my|student\.tarc\.edu\.my)$/i;
+            if (!emailRegex.test(newEmail)) {
+                emailInlineError.style.display = 'block';
+                return;
+            }
+
+            const btn = document.getElementById('btnUpdateProfile');
+            btn.textContent = "Updating...";
+            btn.disabled = true;
+
+            try {
+                const response = await fetch('http://127.0.0.1:5000/api/profile/update', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: currentUser.id, name: newName, email: newEmail })
+                });
+                const result = await response.json();
+
+                if (response.ok) {
+                    localStorage.setItem('tar_current_user', JSON.stringify(result.user));
+                    populateUserData(); // refresh the summary panel
+                    
+                    profileAlert.textContent = "Profile updated successfully!";
+                    profileAlert.className = "alert-box alert-success";
+                    profileAlert.style.display = 'block';
+                } else {
+                    profileAlert.textContent = result.error || "Failed to update profile.";
+                    profileAlert.className = "alert-box alert-error";
+                    profileAlert.style.display = 'block';
+                }
+            } catch (error) {
+                profileAlert.textContent = "Network error. Please try again.";
+                profileAlert.className = "alert-box alert-error";
+                profileAlert.style.display = 'block';
+            } finally {
+                btn.textContent = "Update Profile";
+                btn.disabled = false;
+            }
+        });
+
+        // ==========================================
+        // Form 2: change the account password
+        // ==========================================
+        const newPasswordInput = document.getElementById('newPassword');
+        const pwdInlineError = document.getElementById('pwdInlineError');
+        const pwdAlert = document.getElementById('pwdAlert');
+
+        newPasswordInput.addEventListener('input', function() {
+            const strongPwdRegex = /^(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
+            if (strongPwdRegex.test(this.value)) {
+                pwdInlineError.style.display = 'none';
+            }
+        });
+
+        document.getElementById('passwordForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            pwdAlert.style.display = 'none';
+
+            const oldPwd = document.getElementById('oldPassword').value;
+            const newPwd = newPasswordInput.value;
+            const confirmPwd = document.getElementById('confirmPassword').value;
+
+            const strongPwdRegex = /^(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
+            if (!strongPwdRegex.test(newPwd)) {
+                pwdInlineError.style.display = 'block';
+                return;
+            }
+
+            if (newPwd !== confirmPwd) {
+                pwdAlert.textContent = "New passwords do not match.";
+                pwdAlert.className = "alert-box alert-error";
+                pwdAlert.style.display = 'block';
+                return;
+            }
+
+            const btn = document.getElementById('btnUpdatePwd');
+            btn.textContent = "Updating...";
+            btn.disabled = true;
+
+            try {
+                const response = await fetch('http://127.0.0.1:5000/api/profile/password', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: currentUser.id, oldPassword: oldPwd, newPassword: newPwd })
+                });
+                const result = await response.json();
+
+                if (response.ok) {
+                    pwdAlert.textContent = "Password changed securely!";
+                    pwdAlert.className = "alert-box alert-success";
+                    pwdAlert.style.display = 'block';
+                    document.getElementById('passwordForm').reset();
+                } else {
+                    pwdAlert.textContent = result.error || "Failed to update password.";
+                    pwdAlert.className = "alert-box alert-error";
+                    pwdAlert.style.display = 'block';
+                }
+            } catch (error) {
+                pwdAlert.textContent = "Network error. Please try again.";
+                pwdAlert.className = "alert-box alert-error";
+                pwdAlert.style.display = 'block';
+            } finally {
+                btn.textContent = "Update Password";
+                btn.disabled = false;
+            }
+        });
+
+        // ==========================================
+        // Form 3: update the email notification preference
+        // ==========================================
+        document.getElementById('notifyForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const notifyAlert = document.getElementById('notifyAlert');
+            notifyAlert.style.display = 'none';
+
+            const notifSetting = document.getElementById('notification').value;
+            const btn = document.getElementById('btnUpdateNotify');
+            btn.textContent = "Updating...";
+            btn.disabled = true;
+
+            try {
+                const response = await fetch('http://127.0.0.1:5000/api/profile/notification', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: currentUser.id, notification: notifSetting })
+                });
+                const result = await response.json();
+
+                if (response.ok) {
+                    localStorage.setItem('tar_current_user', JSON.stringify(result.user));
+                    populateUserData(); // refresh the summary panel
+                    
+                    notifyAlert.textContent = "Notification preferences saved!";
+                    notifyAlert.className = "alert-box alert-success";
+                    notifyAlert.style.display = 'block';
+                } else {
+                    notifyAlert.textContent = "Update failed.";
+                    notifyAlert.className = "alert-box alert-error";
+                    notifyAlert.style.display = 'block';
+                }
+            } catch (error) {
+                notifyAlert.textContent = "Network error.";
+                notifyAlert.className = "alert-box alert-error";
+                notifyAlert.style.display = 'block';
+            } finally {
+                btn.textContent = "Update Setting";
+                btn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
